@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Turnier Musik</title>
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
+      margin: 24px; 
+      background: #f5f5f5;
+    }
+    .wrap { 
+      max-width: 640px; 
+      margin: 0 auto;
+      background: white;
+      padding: 32px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin-top: 0;
+      color: #333;
+    }
+    button { 
+      font-size: 22px; 
+      padding: 14px 18px; 
+      margin-right: 12px; 
+      margin-top: 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      transition: background 0.2s;
+    }
+    button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .status { 
+      margin-top: 16px; 
+      font-size: 16px; 
+      opacity: 0.85;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+    .hint { 
+      margin-top: 10px; 
+      font-size: 14px; 
+      opacity: 0.75;
+    }
+    code {
+      background: #f1f1f1;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    .scrubber-container {
+      margin-top: 24px;
+      margin-bottom: 16px;
+    }
+    .scrubber-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .time-display {
+      font-family: monospace;
+      font-size: 14px;
+      color: #666;
+      min-width: 100px;
+      text-align: center;
+    }
+    input[type="range"] {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #ddd;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #007bff;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #0056b3;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #007bff;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s;
+    }
+    input[type="range"]::-moz-range-thumb:hover {
+      background: #0056b3;
+    }
+    input[type="range"]:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Turnier Musik</h1>
+
+    <div>
+      <button id="btnStart">Start</button>
+      <button id="btnPause" disabled>Pause</button>
+      <button id="btnStop" disabled>Stop</button>
+    </div>
+
+    <div class="status" id="status">Status: bereit</div>
+    
+    <div class="scrubber-container">
+      <div class="scrubber-wrapper">
+        <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+        <input type="range" id="scrubber" min="0" max="100" value="0" step="0.1" disabled>
+      </div>
+    </div>
+    
+    <div class="hint">
+      Audio-Dateien werden vom Server konfiguriert. Prüfe <code>app.py</code> für Dateinamen.
+    </div>
+  </div>
+
+  <script>
+    // API-Endpunkte
+    const API_BASE = "";
+    
+    const btnStart = document.getElementById("btnStart");
+    const btnPause = document.getElementById("btnPause");
+    const btnStop = document.getElementById("btnStop");
+    const statusEl = document.getElementById("status");
+    const scrubber = document.getElementById("scrubber");
+    const timeDisplay = document.getElementById("timeDisplay");
+
+    let currentStatus = "stopped";
+    let statusPollInterval = null;
+    let positionPollInterval = null;
+    let currentPosition = 0;
+    let totalDuration = 0;
+    let isDragging = false;
+
+    // Status-Text Mapping
+    const statusTexts = {
+      "stopped": "bereit",
+      "intro": "Intro läuft …",
+      "looping": "Loop läuft (Endlosschleife) …",
+      "paused": "pausiert",
+      "error": "Fehler"
+    };
+
+    // API-Call Helper
+    async function apiCall(endpoint, method = "POST", body = null) {
+      try {
+        const options = {
+          method: method,
+          headers: {
+            "Content-Type": "application/json"
+          }
+        };
+        if (body) {
+          options.body = JSON.stringify(body);
+        }
+        const response = await fetch(`${API_BASE}${endpoint}`, options);
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("API-Fehler:", error);
+        return { status: "error", message: "Netzwerk-Fehler" };
+      }
+    }
+    
+    // Zeit formatieren (Sekunden → MM:SS)
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return "00:00";
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    
+    // Position aktualisieren
+    async function updatePosition() {
+      if (isDragging) return; // Während Drag keine Updates
+      
+      const data = await apiCall("/api/position", "GET");
+      if (data.position !== undefined && data.duration !== undefined) {
+        currentPosition = data.position;
+        totalDuration = data.duration;
+        
+        // Scrubber aktualisieren
+        if (totalDuration > 0) {
+          const percentage = (currentPosition / totalDuration) * 100;
+          scrubber.value = percentage;
+        }
+        
+        // Zeit-Anzeige aktualisieren
+        timeDisplay.textContent = `${formatTime(currentPosition)} / ${formatTime(totalDuration)}`;
+      }
+    }
+
+    // Status aktualisieren
+    async function updateStatus() {
+      const data = await apiCall("/api/status", "GET");
+      if (data.status) {
+        currentStatus = data.status;
+        statusEl.textContent = `Status: ${data.message || statusTexts[data.status] || data.status}`;
+        updateButtonStates();
+      }
+    }
+
+    // Button-States aktualisieren
+    function updateButtonStates() {
+      switch (currentStatus) {
+        case "stopped":
+          btnStart.disabled = false;
+          btnPause.disabled = true;
+          btnStop.disabled = true;
+          btnPause.textContent = "Pause";
+          scrubber.disabled = true;
+          break;
+        case "intro":
+        case "queued":
+        case "looping":
+          btnStart.disabled = true;
+          btnPause.disabled = false;
+          btnStop.disabled = false;
+          btnPause.textContent = "Pause";
+          scrubber.disabled = false;
+          break;
+        case "paused":
+          btnStart.disabled = false;
+          btnPause.disabled = false;
+          btnStop.disabled = false;
+          btnPause.textContent = "Weiter";
+          scrubber.disabled = false;
+          break;
+        default:
+          btnStart.disabled = false;
+          btnPause.disabled = true;
+          btnStop.disabled = true;
+          scrubber.disabled = true;
+      }
+    }
+    
+    // Seek-Funktion
+    async function seekToPosition(position) {
+      const data = await apiCall("/api/seek", "POST", { position: position });
+      if (data.status === "success") {
+        currentPosition = data.position;
+        await updatePosition(); // Aktualisiere Position nach Seek
+      }
+    }
+    
+    // Scrubber Event-Handler
+    scrubber.addEventListener("mousedown", () => {
+      isDragging = true;
+    });
+    
+    scrubber.addEventListener("mouseup", async (e) => {
+      isDragging = false;
+      const percentage = parseFloat(scrubber.value);
+      if (totalDuration > 0) {
+        const targetPosition = (percentage / 100) * totalDuration;
+        await seekToPosition(targetPosition);
+      }
+    });
+    
+    scrubber.addEventListener("input", (e) => {
+      // Während Drag: Zeige Vorschau-Position
+      if (totalDuration > 0) {
+        const percentage = parseFloat(scrubber.value);
+        const previewPosition = (percentage / 100) * totalDuration;
+        timeDisplay.textContent = `${formatTime(previewPosition)} / ${formatTime(totalDuration)}`;
+      }
+    });
+    
+    // Touch-Events für Mobile
+    scrubber.addEventListener("touchstart", () => {
+      isDragging = true;
+    });
+    
+    scrubber.addEventListener("touchend", async (e) => {
+      isDragging = false;
+      const percentage = parseFloat(scrubber.value);
+      if (totalDuration > 0) {
+        const targetPosition = (percentage / 100) * totalDuration;
+        await seekToPosition(targetPosition);
+      }
+    });
+
+    // Start-Button
+    btnStart.addEventListener("click", async () => {
+      if (currentStatus === "paused") {
+        // Resume
+        const data = await apiCall("/api/resume");
+        if (data.status) {
+          currentStatus = data.status;
+          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+          updateButtonStates();
+        }
+      } else {
+        // Start von Anfang
+        const data = await apiCall("/api/start");
+        if (data.status) {
+          currentStatus = data.status;
+          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+          updateButtonStates();
+        }
+      }
+    });
+
+    // Pause-Button
+    btnPause.addEventListener("click", async () => {
+      if (currentStatus === "paused") {
+        // Resume über Start-Button
+        btnStart.click();
+      } else {
+        // Pause
+        const data = await apiCall("/api/pause");
+        if (data.status) {
+          currentStatus = data.status;
+          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+          updateButtonStates();
+        }
+      }
+    });
+
+    // Stop-Button
+    btnStop.addEventListener("click", async () => {
+      const data = await apiCall("/api/stop");
+      if (data.status) {
+        currentStatus = data.status;
+        statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+        updateButtonStates();
+      }
+    });
+
+    // Hotkeys
+    document.addEventListener("keydown", (e) => {
+      // Ignoriere wenn in Input-Feldern
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+        return;
+      }
+
+      // Space = Start/Pause
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (currentStatus === "paused" || currentStatus === "stopped") {
+          btnStart.click();
+        } else if (currentStatus === "intro" || currentStatus === "queued" || currentStatus === "looping") {
+          btnPause.click();
+        }
+      }
+
+      // S = Stop
+      if (e.code === "KeyS" && (e.ctrlKey || e.metaKey) === false) {
+        e.preventDefault();
+        if (currentStatus !== "stopped") {
+          btnStop.click();
+        }
+      }
+    });
+
+    // Status-Polling starten (alle 500ms)
+    statusPollInterval = setInterval(updateStatus, 500);
+    
+    // Position-Polling starten (alle 300ms)
+    positionPollInterval = setInterval(updatePosition, 300);
+
+    // Initialer Status
+    updateStatus();
+    updateButtonStates();
+    updatePosition();
+  </script>
+</body>
+</html>
+
