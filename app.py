@@ -99,28 +99,6 @@ def position():
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
-@app.route("/api/seek", methods=["POST"])
-def seek():
-    """Springt zu bestimmter Position"""
-    try:
-        data = request.get_json()
-        if not data or "position" not in data:
-            return jsonify({"status": "error", "message": "Position fehlt"}), 400
-        
-        position = float(data["position"])
-        success = audio.set_position(position)
-        
-        if success:
-            status_data = audio.get_status()
-            return jsonify({
-                "status": "success",
-                "position": audio.get_position(),
-                "message": status_data["message"]
-            }), 200
-        else:
-            return jsonify({"status": "error", "message": "Position konnte nicht gesetzt werden"}), 500
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
