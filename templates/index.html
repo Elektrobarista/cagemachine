@@ -130,7 +130,6 @@
     <div class="scrubber-container">
       <div class="scrubber-wrapper">
         <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
-        <input type="range" id="scrubber" min="0" max="100" value="0" step="0.1" disabled>
       </div>
     </div>
     
@@ -147,7 +146,6 @@
     const btnPause = document.getElementById("btnPause");
     const btnStop = document.getElementById("btnStop");
     const statusEl = document.getElementById("status");
-    const scrubber = document.getElementById("scrubber");
     const timeDisplay = document.getElementById("timeDisplay");
 
     let currentStatus = "stopped";
@@ -155,7 +153,6 @@
     let positionPollInterval = null;
     let currentPosition = 0;
     let totalDuration = 0;
-    let isDragging = false;
 
     // Status-Text Mapping
     const statusTexts = {
@@ -197,18 +194,10 @@
     
     // Position aktualisieren
     async function updatePosition() {
-      if (isDragging) return; // Während Drag keine Updates
-      
       const data = await apiCall("/api/position", "GET");
       if (data.position !== undefined && data.duration !== undefined) {
         currentPosition = data.position;
         totalDuration = data.duration;
-        
-        // Scrubber aktualisieren
-        if (totalDuration > 0) {
-          const percentage = (currentPosition / totalDuration) * 100;
-          scrubber.value = percentage;
-        }
         
         // Zeit-Anzeige aktualisieren
         timeDisplay.textContent = `${formatTime(currentPosition)} / ${formatTime(totalDuration)}`;
@@ -233,77 +222,27 @@
           btnPause.disabled = true;
           btnStop.disabled = true;
           btnPause.textContent = "Pause";
-          scrubber.disabled = true;
           break;
         case "intro":
-        case "queued":
         case "looping":
           btnStart.disabled = true;
           btnPause.disabled = false;
           btnStop.disabled = false;
           btnPause.textContent = "Pause";
-          scrubber.disabled = false;
           break;
         case "paused":
           btnStart.disabled = false;
           btnPause.disabled = false;
           btnStop.disabled = false;
           btnPause.textContent = "Weiter";
-          scrubber.disabled = false;
           break;
         default:
           btnStart.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
-          scrubber.disabled = true;
       }
     }
     
-    // Seek-Funktion
-    async function seekToPosition(position) {
-      const data = await apiCall("/api/seek", "POST", { position: position });
-      if (data.status === "success") {
-        currentPosition = data.position;
-        await updatePosition(); // Aktualisiere Position nach Seek
-      }
-    }
-    
-    // Scrubber Event-Handler
-    scrubber.addEventListener("mousedown", () => {
-      isDragging = true;
-    });
-    
-    scrubber.addEventListener("mouseup", async (e) => {
-      isDragging = false;
-      const percentage = parseFloat(scrubber.value);
-      if (totalDuration > 0) {
-        const targetPosition = (percentage / 100) * totalDuration;
-        await seekToPosition(targetPosition);
-      }
-    });
-    
-    scrubber.addEventListener("input", (e) => {
-      // Während Drag: Zeige Vorschau-Position
-      if (totalDuration > 0) {
-        const percentage = parseFloat(scrubber.value);
-        const previewPosition = (percentage / 100) * totalDuration;
-        timeDisplay.textContent = `${formatTime(previewPosition)} / ${formatTime(totalDuration)}`;
-      }
-    });
-    
-    // Touch-Events für Mobile
-    scrubber.addEventListener("touchstart", () => {
-      isDragging = true;
-    });
-    
-    scrubber.addEventListener("touchend", async (e) => {
-      isDragging = false;
-      const percentage = parseFloat(scrubber.value);
-      if (totalDuration > 0) {
-        const targetPosition = (percentage / 100) * totalDuration;
-        await seekToPosition(targetPosition);
-      }
-    });
 
     // Start-Button
     btnStart.addEventListener("click", async () => {
@@ -364,7 +303,7 @@
         e.preventDefault();
         if (currentStatus === "paused" || currentStatus === "stopped") {
           btnStart.click();
-        } else if (currentStatus === "intro" || currentStatus === "queued" || currentStatus === "looping") {
+        } else if (currentStatus === "intro" || currentStatus === "looping") {
           btnPause.click();
         }
       }
