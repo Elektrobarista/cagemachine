@@ -121,6 +121,7 @@
 
     <div>
       <button id="btnStart">Start</button>
+      <button id="btnStart5Min">Start ab 5 Min</button>
       <button id="btnPause" disabled>Pause</button>
       <button id="btnStop" disabled>Stop</button>
     </div>
@@ -143,6 +144,7 @@
     const API_BASE = "";
     
     const btnStart = document.getElementById("btnStart");
+    const btnStart5Min = document.getElementById("btnStart5Min");
     const btnPause = document.getElementById("btnPause");
     const btnStop = document.getElementById("btnStop");
     const statusEl = document.getElementById("status");
@@ -219,6 +221,7 @@
       switch (currentStatus) {
         case "stopped":
           btnStart.disabled = false;
+          btnStart5Min.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
           btnPause.textContent = "Pause";
@@ -226,18 +229,21 @@
         case "intro":
         case "looping":
           btnStart.disabled = true;
+          btnStart5Min.disabled = true;
           btnPause.disabled = false;
           btnStop.disabled = false;
           btnPause.textContent = "Pause";
           break;
         case "paused":
           btnStart.disabled = false;
+          btnStart5Min.disabled = false;
           btnPause.disabled = false;
           btnStop.disabled = false;
           btnPause.textContent = "Weiter";
           break;
         default:
           btnStart.disabled = false;
+          btnStart5Min.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
       }
@@ -262,6 +268,16 @@
           statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
           updateButtonStates();
         }
+      }
+    });
+
+    // Start ab 5 Minuten Button
+    btnStart5Min.addEventListener("click", async () => {
+      const data = await apiCall("/api/start_at", "POST", { position: 300 });
+      if (data.status) {
+        currentStatus = data.status;
+        statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+        updateButtonStates();
       }
     });
 

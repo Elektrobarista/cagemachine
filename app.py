@@ -37,6 +37,28 @@ def start():
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
+@app.route("/api/start_at", methods=["POST"])
+def start_at():
+    """Startet Audio ab einer bestimmten Position (in Sekunden)"""
+    try:
+        data = request.get_json() or {}
+        position = data.get("position", 0)
+        
+        # Stelle sicher, dass position eine Zahl ist
+        try:
+            position = float(position)
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "Ungültige Position"}), 400
+        
+        audio.start_at_position(position)
+        status = audio.get_status()
+        return jsonify(status), 200
+    except FileNotFoundError as e:
+        return jsonify({"status": "error", "message": str(e)}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
+
+
 @app.route("/api/pause", methods=["POST"])
 def pause():
     """Pausiert Audio"""

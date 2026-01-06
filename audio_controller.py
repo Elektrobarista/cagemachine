@@ -9,20 +9,10 @@ class AudioController:
     
     def _dbg_log(self, run_id, hypothesis_id, location, message, data=None):
         # #region agent log
-        try:
-            payload = {
-                "sessionId": "debug-session",
-                "runId": run_id,
-                "hypothesisId": hypothesis_id,
-                "location": location,
-                "message": message,
-                "data": data or {},
-                "timestamp": int(time.time() * 1000),
-            }
-            with open("/Users/alex/github/cagemachine/.cursor/debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
+        # Bug 1 Fix: Debug-Logging entfernt - war nur für temporäres Debugging
+        # Hardcodierter Pfad würde auf anderen Systemen fehlschlagen
+        # Falls Debug-Logging benötigt wird, sollte es über ein konfigurierbares Logging-System erfolgen
+        pass
         # #endregion
 
     def __init__(self, intro_path=None, loop_path=None):
@@ -41,7 +31,6 @@ class AudioController:
         self.position_thread = None
         self.loop_thread = None  # Thread für Loop-Übergang nach gequeueten Track
         self._previous_state = None  # Merkt sich vorherigen State beim Pause
-        self._log_path = "/Users/alex/github/cagemachine/.cursor/debug.log"
 
         def _resolve_audio_path(primary_path):
             # Versuche primären Pfad zu laden (zur Validierung)
@@ -180,13 +169,111 @@ class AudioController:
         if needs_resume:
             self.resume()
     
+    def start_at_position(self, seconds):
+        """Startet Audio ab einer bestimmten Position (in Sekunden)"""
+        # Bug 1 Fix: Prüfe intro_duration OHNE Lock zu halten, um Deadlock zu vermeiden
+        with self.lock:
+            intro_duration_check = self.intro_duration
+        
+        # Wenn intro_duration nicht bekannt ist, starte normal (OHNE Lock)
+        if intro_duration_check is None:
+            self.start()
+            return
+        
+        # Lock wieder erwerben für den Rest der Operation
+        with self.lock:
+            if seconds < 0:
+                seconds = 0
+            
+            # Stoppe alles vorher
+            pygame.mixer.music.stop()
+            
+            # Prüfe ob Dateien existieren
+            if not os.path.exists(self.intro_play_path):
+                self.state = "stopped"
+                raise FileNotFoundError(f"Intro-Datei nicht gefunden oder ungültig: {self.intro_play_path}")
+            if not os.path.exists(self.loop_play_path):
+                self.state = "stopped"
+                raise FileNotFoundError(f"Loop-Datei nicht gefunden oder ungültig: {self.loop_play_path}")
+            
+            if seconds < intro_duration_check:
+                # Position im Intro-Bereich
+                self.state = "intro"
+                try:
+                    pygame.mixer.music.load(self.intro_play_path)
+                    pygame.mixer.music.play()
+                    # Versuche Position zu setzen
+                    try:
+                        pygame.mixer.music.set_pos(seconds)
+                    except:
+                        # set_pos() nicht unterstützt, ignoriere
+                        pass
+                    self.current_position = seconds
+                    
+                    # Thread für Übergang zu Loop
+                    self.transition_thread = threading.Thread(
+                        target=self._transition_to_loop,
+                        daemon=True
+                    )
+                    self.transition_thread.start()
+                    
+                    # Thread für Position-Tracking starten
+                    self.position_thread = threading.Thread(
+                        target=self._track_position,
+                        daemon=True
+                    )
+                    self.position_thread.start()
+                except Exception as e:
+                    self.state = "stopped"
+                    raise
+            else:
+                # Position im Loop-Bereich - starte direkt Loop
+                loop_pos = seconds - intro_duration_check
+                if loop_pos < 0:
+                    loop_pos = 0
+                
+                self.state = "looping"
+                try:
+                    pygame.mixer.music.load(self.loop_play_path)
+                    pygame.mixer.music.play(loops=-1)
+                    # Versuche Position im Loop zu setzen
+                    try:
+                        pygame.mixer.music.set_pos(loop_pos)
+                    except:
+                        # set_pos() nicht unterstützt, ignoriere
+                        pass
+                    self.current_position = seconds
+                    
+                    # Bug 2 Fix: Starte auch den continuous_loop_queue Thread für nahtlose Loops
+                    self.loop_thread = threading.Thread(
+                        target=self._continuous_loop_queue,
+                        daemon=True
+                    )
+                    self.loop_thread.start()
+                    
+                    # Thread für Position-Tracking starten
+                    self.position_thread = threading.Thread(
+                        target=self._track_position,
+                        daemon=True
+                    )
+                    self.position_thread.start()
+                except Exception as e:
+                    self.state = "stopped"
+                    raise
+    
     def _transition_to_loop(self):
-        """Queue Loop nahtlos vor Ende des Intros, dann starte Loop endlos"""
+        """Queue Loop nahtlos vor Ende des Intros mit Fade-Out, dann starte kontinuierliches Looping"""
         # Überwache Position und queue basierend auf tatsächlicher Playback-Position
         # statt auf get_length() (kann ungenau sein)
         
-        check_interval = 0.1
+        check_interval = 0.05  # Häufigere Checks für präziseren Übergang
         intro_duration_estimate = self.intro_duration or 600  # Fallback-Schätzung
+        
+        # Fade-Dauer für nahtlosen Übergang (in Sekunden)
+        fade_duration = 0.3  # 0.3 Sekunden Fade
+        
+        # Queue Loop früher für besseren Puffer (2-3 Sekunden vor Ende)
+        queue_time_before_end = 2.5
         
         while True:
             time.sleep(check_interval)
@@ -200,15 +287,30 @@ class AudioController:
                     pos_ms = pygame.mixer.music.get_pos()
                     if pos_ms >= 0:
                         current_pos = pos_ms / 1000.0
-                        # Queue etwa 1.5s vor erwartetem Ende (Puffer für Ungenauigkeiten)
-                        if current_pos >= intro_duration_estimate - 1.5:
+                        
+                        # Queue Loop früher für nahtloseren Übergang
+                        if current_pos >= intro_duration_estimate - queue_time_before_end:
                             pygame.mixer.music.queue(self.loop_play_path)
-                            # Starte Thread für Loop-Übergang
+                            # Starte Thread für kontinuierliches Looping
                             self.loop_thread = threading.Thread(
-                                target=self._start_loop_after_queue,
+                                target=self._continuous_loop_queue,
                                 daemon=True
                             )
                             self.loop_thread.start()
+                            
+                            # Starte Fade-Out-Thread kurz vor Ende des Intros
+                            fade_thread = threading.Thread(
+                                target=self._fade_out_intro,
+                                args=(fade_duration,),
+                                daemon=True
+                            )
+                            fade_thread.start()
+                            
+                            # Setze State auf "looping" sobald Loop gequeued ist
+                            # Der gequeuete Loop wird nahtlos nach dem Intro spielen
+                            self.state = "looping"
+                            if self.intro_duration:
+                                self.current_position = self.intro_duration
                             return
                 except:
                     pass
@@ -223,11 +325,68 @@ class AudioController:
                         self.current_position = self.intro_duration
                     return
     
-    def _start_loop_after_queue(self):
-        """Startet Loop mit Endlosschleife nach gequeueten Track"""
-        # Der gequeuete Loop spielt einmal nahtlos nach dem Intro
-        # Um endlos zu loopen, müssen wir den Loop mit loops=-1 neu starten
-        # Verwende Position-Tracking statt Zeit-basierter Berechnung
+    def _fade_out_intro(self, fade_duration):
+        """Führt einen kurzen manuellen Volume-Fade-Out am Ende des Intros durch"""
+        # Warte bis kurz vor Ende des Intros, dann führe einen manuellen Volume-Fade durch
+        if self.intro_duration is None:
+            return
+        
+        check_interval = 0.01  # Sehr häufige Checks für präzises Timing
+        fade_start_time = self.intro_duration - fade_duration
+        
+        # Hole initiales Volume (Fallback auf 1.0 wenn nicht verfügbar)
+        try:
+            initial_volume = pygame.mixer.music.get_volume()
+        except:
+            initial_volume = 1.0
+        
+        # Warte bis Fade-Start-Zeit erreicht ist
+        while True:
+            time.sleep(check_interval)
+            
+            with self.lock:
+                if self.state != "looping":
+                    # State hat sich geändert, stelle Volume wieder her und beende
+                    pygame.mixer.music.set_volume(initial_volume)
+                    return
+                
+                try:
+                    pos_ms = pygame.mixer.music.get_pos()
+                    if pos_ms >= 0:
+                        current_pos = pos_ms / 1000.0
+                        
+                        # Wenn wir kurz vor Ende sind, starte manuellen Volume-Fade
+                        if current_pos >= fade_start_time and current_pos < self.intro_duration:
+                            # Berechne Fade-Progress (0.0 = Anfang, 1.0 = Ende)
+                            fade_progress = (current_pos - fade_start_time) / fade_duration
+                            fade_progress = min(1.0, max(0.0, fade_progress))
+                            
+                            # Fade-Out: Volume von initial_volume auf 0.0
+                            # Aber wir wollen nicht komplett auf 0, sondern auf einen niedrigen Wert
+                            # damit der Übergang nahtloser ist
+                            target_volume = initial_volume * (1.0 - fade_progress * 0.7)  # Fade auf 30% des Originals
+                            pygame.mixer.music.set_volume(target_volume)
+                            
+                            if current_pos >= self.intro_duration:
+                                # Intro ist vorbei, stelle Volume wieder her für Loop
+                                pygame.mixer.music.set_volume(initial_volume)
+                                return
+                        elif current_pos >= self.intro_duration:
+                            # Intro ist bereits vorbei, stelle Volume wieder her
+                            pygame.mixer.music.set_volume(initial_volume)
+                            return
+                except:
+                    pass
+                
+                # Wenn Musik gestoppt ist, stelle Volume wieder her und beende
+                if not pygame.mixer.music.get_busy():
+                    pygame.mixer.music.set_volume(initial_volume)
+                    return
+    
+    def _continuous_loop_queue(self):
+        """Queued kontinuierlich neue Loops für nahtlose Endlosschleife"""
+        # Statt den Loop zu stoppen und neu zu starten, queuen wir kontinuierlich
+        # neue Loops, bevor der aktuelle fertig ist. Das ist nahtloser.
         
         loop_duration = self.loop_duration
         if loop_duration is None:
@@ -238,57 +397,89 @@ class AudioController:
             except:
                 loop_duration = None
         
-        if loop_duration:
-            check_interval = 0.05
-            loop_started = False
+        if loop_duration is None:
+            # Fallback: Wenn loop_duration nicht bekannt ist, verwende alte Methode
+            return
+        
+        check_interval = 0.05  # Häufige Checks für präzises Timing
+        loop_started = False
+        last_queued_time = None
+        queue_time_before_end = 0.5  # Queue neuen Loop 0.5s vor Ende des aktuellen
+        
+        while True:
+            time.sleep(check_interval)
             
-            while True:
-                time.sleep(check_interval)
-                
-                with self.lock:
-                    if self.state not in ["intro", "looping"]:
-                        return
-                    
-                    if not pygame.mixer.music.get_busy():
-                        # Musik gestoppt - könnte sein, dass gequeueter Loop nicht gestartet hat
-                        # Warte kurz, dann starte Loop manuell
-                        time.sleep(0.1)
-                        if not pygame.mixer.music.get_busy():
-                            # Starte Loop manuell
-                            pygame.mixer.music.load(self.loop_play_path)
-                            pygame.mixer.music.play(loops=-1)
-                            self.state = "looping"
-                            if self.intro_duration:
-                                self.current_position = self.intro_duration
-                            return
-                        continue
-                    
-                    # Überwache Position im Loop
-                    try:
-                        pos_ms = pygame.mixer.music.get_pos()
-                        if pos_ms >= 0:
-                            current_pos = pos_ms / 1000.0
-                            
-                            # Erkennung: Wenn Position sehr klein ist (< 0.1s), hat Loop gestartet
-                            if not loop_started and current_pos < 0.1:
-                                loop_started = True
-                            
-                            # Wenn Loop gestartet hat, prüfe ob er fast fertig ist
-                            if loop_started:
-                                if current_pos >= loop_duration - 0.05:
-                                    break
-                    except:
-                        pass
+            # Bug 2 Fix: Prüfe get_busy() außerhalb des Locks, um Lock-Zeit zu minimieren
+            music_busy = pygame.mixer.music.get_busy()
             
-            # Starte Loop mit Endlosschleife
             with self.lock:
-                if self.state in ["intro", "looping"]:
-                    pygame.mixer.music.stop()
-                    pygame.mixer.music.load(self.loop_play_path)
-                    pygame.mixer.music.play(loops=-1)
-                    self.state = "looping"
-                    if self.intro_duration:
-                        self.current_position = self.intro_duration
+                if self.state != "looping":
+                    return
+                
+                if not music_busy:
+                    # Musik gestoppt - könnte sein, dass gequeueter Loop nicht gestartet hat
+                    # Bug 2 Fix: Lock freigeben vor sleep, um andere Threads nicht zu blockieren
+                    pass
+            
+            # Bug 2 Fix: Sleep außerhalb des Lock-Blocks
+            if not music_busy:
+                time.sleep(0.1)
+                # Prüfe nochmal nach Sleep
+                music_busy_after_sleep = pygame.mixer.music.get_busy()
+                with self.lock:
+                    if self.state != "looping":
+                        return
+                    if not music_busy_after_sleep:
+                        # Starte Loop manuell und queue sofort einen weiteren
+                        pygame.mixer.music.load(self.loop_play_path)
+                        pygame.mixer.music.play()
+                        pygame.mixer.music.queue(self.loop_play_path)
+                        last_queued_time = time.time()
+                        loop_started = True
+                        continue
+                continue
+            
+            # Position-Überwachung innerhalb des Locks
+            with self.lock:
+                if self.state != "looping":
+                    return
+                
+                # Überwache Position im Loop
+                try:
+                    pos_ms = pygame.mixer.music.get_pos()
+                    if pos_ms >= 0:
+                        current_pos = pos_ms / 1000.0
+                        
+                        # Erkennung: Wenn Position sehr klein ist (< 0.1s), hat Loop gestartet
+                        if not loop_started and current_pos < 0.1:
+                            loop_started = True
+                        
+                        # Wenn Loop gestartet hat, queue einen neuen Loop bevor der aktuelle fertig ist
+                        if loop_started:
+                            # Berechne verbleibende Zeit im aktuellen Loop
+                            remaining_time = loop_duration - current_pos
+                            
+                            # Queue neuen Loop wenn wir nah am Ende sind und noch keinen gequeued haben
+                            # oder wenn genug Zeit seit dem letzten Queue vergangen ist
+                            should_queue = False
+                            if remaining_time <= queue_time_before_end:
+                                if last_queued_time is None:
+                                    should_queue = True
+                                else:
+                                    # Stelle sicher, dass wir nicht zu häufig queuen
+                                    time_since_last_queue = time.time() - last_queued_time
+                                    if time_since_last_queue >= loop_duration - queue_time_before_end:
+                                        should_queue = True
+                            
+                            if should_queue:
+                                try:
+                                    pygame.mixer.music.queue(self.loop_play_path)
+                                    last_queued_time = time.time()
+                                except:
+                                    # Queue fehlgeschlagen, versuche es später erneut
+                                    pass
+                except:
+                    pass
     
     
     def pause(self):
@@ -329,6 +520,15 @@ class AudioController:
                             daemon=True
                         )
                         self.transition_thread.start()
+                
+                # Bug 3 Fix: Stelle sicher, dass loop_thread läuft (falls State "looping" ist)
+                if self.state == "looping":
+                    if self.loop_thread is None or not self.loop_thread.is_alive():
+                        self.loop_thread = threading.Thread(
+                            target=self._continuous_loop_queue,
+                            daemon=True
+                        )
+                        self.loop_thread.start()
     
     def stop(self):
         """Stoppt Audio mit Fade-Out (2 Sekunden)"""
