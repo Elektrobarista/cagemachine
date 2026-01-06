@@ -3,136 +3,482 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rage Cage</title>
+  <title>Rage Cage - Turnier Musik</title>
   <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body { 
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
-      margin: 24px; 
-      background: #f5f5f5;
-    }
-    .wrap { 
-      max-width: 640px; 
-      margin: 0 auto;
-      background: white;
-      padding: 32px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    h1 {
-      margin-top: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
       color: #333;
     }
-    button { 
-      font-size: 22px; 
-      padding: 14px 18px; 
-      margin-right: 12px; 
-      margin-top: 12px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      background: #007bff;
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 700;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #555;
+      font-weight: 600;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Navigation */
+    .nav-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      padding: 10px 20px;
+      background: #667eea;
       color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
       transition: background 0.2s;
     }
-    button:hover:not(:disabled) {
-      background: #0056b3;
+
+    .nav-link:hover {
+      background: #5568d3;
     }
-    button:disabled {
-      background: #ccc;
+
+    /* Session Management */
+    .session-controls {
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      font-size: 18px;
+      font-weight: 600;
+      padding: 16px 32px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #e0e0e0;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
       cursor: not-allowed;
     }
-    .status { 
-      margin-top: 16px; 
-      font-size: 16px; 
-      opacity: 0.85;
-      padding: 12px;
-      background: #f8f9fa;
-      border-radius: 4px;
-    }
-    .hint { 
-      margin-top: 10px; 
-      font-size: 14px; 
-      opacity: 0.75;
-    }
-    code {
-      background: #f1f1f1;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: monospace;
-    }
-    .scrubber-container {
-      margin-top: 24px;
+
+    /* Player Input */
+    .player-input-group {
+      display: flex;
+      gap: 12px;
       margin-bottom: 16px;
     }
+
+    .input {
+      flex: 1;
+      padding: 14px 18px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.2s;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .btn-small {
+      padding: 14px 24px;
+      font-size: 14px;
+    }
+
+    .btn-add {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-add:hover {
+      background: #059669;
+    }
+
+    /* Player List */
+    .player-list {
+      margin-top: 20px;
+    }
+
+    .player-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .player-name {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .btn-remove {
+      background: #ef4444;
+      color: white;
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-remove:hover {
+      background: #dc2626;
+    }
+
+    /* Game Mode Selection */
+    .game-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .game-mode-card {
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .game-mode-card:hover {
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .game-mode-card.selected {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .game-mode-name {
+      font-weight: 600;
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .game-mode-desc {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .game-mode-rounds {
+      font-size: 12px;
+      color: #999;
+      font-weight: 500;
+    }
+
+    /* Music Controls */
+    .music-controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .btn-music {
+      font-size: 24px;
+      font-weight: 700;
+      padding: 32px 24px;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .btn-music:hover:not(:disabled) {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+    }
+
+    .btn-start:hover:not(:disabled) {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    }
+
+    .btn-pause {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+    }
+
+    .btn-stop {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .status.active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .scrubber-container {
+      margin-top: 24px;
+    }
+
     .scrubber-wrapper {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+
     .time-display {
-      font-family: monospace;
-      font-size: 14px;
-      color: #666;
-      min-width: 100px;
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      font-weight: 600;
+      color: #667eea;
+      min-width: 140px;
       text-align: center;
     }
-    input[type="range"] {
+
+    /* Session Info */
+    .session-info {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .session-info-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .session-info-label {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .session-info-value {
+      color: #333;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    /* Game Controls */
+    .game-controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn-game {
       flex: 1;
-      height: 6px;
-      border-radius: 3px;
-      background: #ddd;
-      outline: none;
-      -webkit-appearance: none;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: 600;
     }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #007bff;
-      cursor: pointer;
-      transition: background 0.2s;
+
+    .btn-game-start {
+      background: #10b981;
+      color: white;
     }
-    input[type="range"]::-webkit-slider-thumb:hover {
-      background: #0056b3;
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #007bff;
-      cursor: pointer;
-      border: none;
-      transition: background 0.2s;
-    }
-    input[type="range"]::-moz-range-thumb:hover {
-      background: #0056b3;
-    }
-    input[type="range"]:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+
+    .btn-game-end {
+      background: #ef4444;
+      color: white;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Rage Cage</h1>
+  <div class="container">
+    <!-- Session Management Card -->
+    <div class="card">
+      <a href="/statistics" class="nav-link">📊 Statistik anzeigen</a>
+      
+      <h1>🎮 Session Management</h1>
+      
+      <div class="session-controls">
+        <button class="btn btn-primary" id="btnCreateEvening">Neuen Abend starten</button>
+        <button class="btn btn-secondary" id="btnCreateSession" style="display: none;">Neue Session starten</button>
+      </div>
 
-    <div>
-      <button id="btnStart">Start</button>
-      <!-- BETA: 5-Minuten-Button auskommentiert für Beta-Release -->
-      <!-- Zum Aktivieren: Kommentar entfernen und btnStart5Min in updateButtonStates() wieder aktivieren -->
-      <!-- <button id="btnStart5Min">Start ab 5 Min</button> -->
-      <button id="btnPause" disabled>Pause</button>
-      <button id="btnStop" disabled>Stop</button>
+      <div id="eveningInfo" class="session-info" style="display: none;">
+        <div class="session-info-item">
+          <span class="session-info-label">Abend ID:</span>
+          <span class="session-info-value" id="eveningId">-</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-info-label">Spiele:</span>
+          <span class="session-info-value" id="gameCount">0</span>
+        </div>
+      </div>
+
+      <div id="sessionInfo" class="session-info" style="display: none;">
+        <div class="session-info-item">
+          <span class="session-info-label">Session ID:</span>
+          <span class="session-info-value" id="sessionId">-</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-info-label">Spieler:</span>
+          <span class="session-info-value" id="playerCount">0</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-info-label">Spielmodus:</span>
+          <span class="session-info-value" id="gameModeDisplay">-</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-info-label">Runden:</span>
+          <span class="session-info-value" id="roundsDisplay">-</span>
+        </div>
+      </div>
+
+      <div id="currentGameInfo" class="session-info" style="display: none;">
+        <div class="session-info-item">
+          <span class="session-info-label">Aktives Spiel:</span>
+          <span class="session-info-value" id="currentGameMode">-</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-info-label">Status:</span>
+          <span class="session-info-value" id="currentGameStatus">-</span>
+        </div>
+      </div>
+
+      <div id="playerSection" style="display: none;">
+        <div class="section-title">Spieler hinzufügen</div>
+        <div class="player-input-group">
+          <input 
+            type="text" 
+            class="input" 
+            id="playerNameInput" 
+            placeholder="Spielername eingeben..."
+            maxlength="50"
+          />
+          <button class="btn btn-add btn-small" id="btnAddPlayer">Hinzufügen</button>
+        </div>
+
+        <div class="player-list" id="playerList">
+          <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <div>Noch keine Spieler hinzugefügt</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="gameModeSection" style="display: none;">
+        <div class="section-title">Spielmodus wählen</div>
+        <div class="game-mode-grid" id="gameModeGrid"></div>
+      </div>
+
+      <div id="gameControls" style="display: none;">
+        <div class="game-controls">
+          <button class="btn btn-game btn-game-start" id="btnStartGame">Spiel starten</button>
+          <button class="btn btn-game btn-game-end" id="btnEndGame" disabled>Spiel beenden</button>
+        </div>
+      </div>
     </div>
 
-    <div class="status" id="status">Status: bereit</div>
-    
-    <div class="scrubber-container">
-      <div class="scrubber-wrapper">
-        <span class="time-display" id="timeDisplay">00:00</span>
+    <!-- Music Control Card -->
+    <div class="card">
+      <h1>🎵 Musik Steuerung</h1>
+      
+      <div class="music-controls">
+        <button class="btn-music btn-start" id="btnStart">▶ Start</button>
+        <button class="btn-music btn-pause" id="btnPause" disabled>⏸ Pause</button>
+        <button class="btn-music btn-stop" id="btnStop" disabled>⏹ Stop</button>
+      </div>
+
+      <div class="status" id="status">Status: bereit</div>
+      
+      <div class="scrubber-container">
+        <div class="scrubber-wrapper">
+          <span class="time-display" id="timeDisplay">00:00</span>
+        </div>
       </div>
     </div>
   </div>
@@ -141,14 +487,35 @@
     // API-Endpunkte
     const API_BASE = "";
     
+    // DOM-Elemente
+    const btnCreateEvening = document.getElementById("btnCreateEvening");
+    const btnCreateSession = document.getElementById("btnCreateSession");
+    const eveningInfo = document.getElementById("eveningInfo");
+    const sessionInfo = document.getElementById("sessionInfo");
+    const currentGameInfo = document.getElementById("currentGameInfo");
+    const playerSection = document.getElementById("playerSection");
+    const gameModeSection = document.getElementById("gameModeSection");
+    const gameControls = document.getElementById("gameControls");
+    const playerNameInput = document.getElementById("playerNameInput");
+    const btnAddPlayer = document.getElementById("btnAddPlayer");
+    const playerList = document.getElementById("playerList");
+    const gameModeGrid = document.getElementById("gameModeGrid");
+    const btnStartGame = document.getElementById("btnStartGame");
+    const btnEndGame = document.getElementById("btnEndGame");
+    
     const btnStart = document.getElementById("btnStart");
-    // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
-    const btnStart5Min = document.getElementById("btnStart5Min"); // Kann null sein wenn Button auskommentiert ist
     const btnPause = document.getElementById("btnPause");
     const btnStop = document.getElementById("btnStop");
     const statusEl = document.getElementById("status");
     const timeDisplay = document.getElementById("timeDisplay");
 
+    // State
+    let currentEveningId = null;
+    let currentEvening = null;
+    let currentSessionId = null;
+    let currentSession = null;
+    let currentGame = null;
+    let gameModes = {};
     let currentStatus = "stopped";
     let statusPollInterval = null;
     let positionPollInterval = null;
@@ -177,15 +544,366 @@
           options.body = JSON.stringify(body);
         }
         const response = await fetch(`${API_BASE}${endpoint}`, options);
+        
+        // Prüfe ob Response erfolgreich war
+        if (!response.ok) {
+          // Versuche JSON-Fehler zu lesen, sonst generischer Fehler
+          try {
+            const errorData = await response.json();
+            return errorData;
+          } catch {
+            return { error: `HTTP ${response.status}: ${response.statusText}` };
+          }
+        }
+        
         const data = await response.json();
         return data;
       } catch (error) {
         console.error("API-Fehler:", error);
-        return { status: "error", message: "Netzwerk-Fehler" };
+        // Gebe konsistentes Fehlerformat zurück, das von allen Handlern erwartet wird
+        return { error: "Netzwerk-Fehler: " + (error.message || "Verbindung zum Server fehlgeschlagen") };
       }
     }
-    
-    // Zeit formatieren (Sekunden → MM:SS)
+
+    // Evening Management
+    async function createEvening() {
+      // Deaktiviere Button sofort, um Doppelklicks zu verhindern
+      btnCreateEvening.disabled = true;
+      try {
+        const data = await apiCall("/api/evening/create", "POST");
+        if (data.evening) {
+          currentEveningId = data.evening.id;
+          currentEvening = data.evening;
+          updateEveningUI();
+          await createSession();
+        } else if (data.error) {
+          alert(data.error);
+        }
+      } finally {
+        // Reaktiviere Button nach Abschluss (oder Fehler)
+        btnCreateEvening.disabled = false;
+      }
+    }
+
+    async function loadEvening() {
+      const data = await apiCall("/api/evening/current", "GET");
+      if (data.evening) {
+        currentEveningId = data.evening.id;
+        currentEvening = data.evening;
+        updateEveningUI();
+      }
+    }
+
+    // Session Management
+    async function createSession() {
+      // Deaktiviere Button sofort, um Doppelklicks zu verhindern
+      if (btnCreateSession) {
+        btnCreateSession.disabled = true;
+      }
+      try {
+        const data = await apiCall("/api/session/create", "POST");
+        if (data.session_id) {
+          currentSessionId = data.session_id;
+          currentSession = data.session;
+          await loadGameModes(); // Warte auf Game-Modes, damit UI vollständig ist
+          updateSessionUI();
+        } else if (data.error) {
+          alert(data.error);
+        }
+      } finally {
+        // Reaktiviere Button nach Abschluss (oder Fehler)
+        if (btnCreateSession) {
+          btnCreateSession.disabled = false;
+        }
+      }
+    }
+
+    async function addPlayer() {
+      const name = playerNameInput.value.trim();
+      if (!name || !currentSessionId) return;
+
+      const data = await apiCall(`/api/session/${currentSessionId}/players`, "POST", { name });
+      if (data.session) {
+        currentSession = data.session;
+        updateSessionUI();
+        playerNameInput.value = "";
+        playerNameInput.focus();
+      } else if (data.error) {
+        alert(data.error);
+      }
+    }
+
+    window.removePlayer = async function(playerId) {
+      if (!currentSessionId) return;
+      const data = await apiCall(`/api/session/${currentSessionId}/players/${playerId}`, "DELETE");
+      if (data.session) {
+        currentSession = data.session;
+        updateSessionUI();
+      }
+    };
+
+    async function setGameMode(gameMode) {
+      if (!currentSessionId) return;
+      const data = await apiCall(`/api/session/${currentSessionId}/game-mode`, "POST", { game_mode: gameMode });
+      if (data.session) {
+        currentSession = data.session;
+        updateSessionUI();
+        updateGameModeSelection();
+      } else if (data.error) {
+        alert(data.error);
+      }
+    }
+
+    async function loadGameModes() {
+      const data = await apiCall("/api/game-modes", "GET");
+      if (data.game_modes) {
+        gameModes = data.game_modes;
+        renderGameModes();
+      }
+    }
+
+    function renderGameModes() {
+      gameModeGrid.innerHTML = "";
+      Object.entries(gameModes).forEach(([key, mode]) => {
+        const card = document.createElement("div");
+        card.className = "game-mode-card";
+        if (currentSession && currentSession.game_mode === key) {
+          card.classList.add("selected");
+        }
+        card.innerHTML = `
+          <div class="game-mode-name">${mode.name}</div>
+          <div class="game-mode-desc">${mode.description}</div>
+          <div class="game-mode-rounds">${mode.rounds ? `${mode.rounds} Runden` : 'Dynamisch'}</div>
+        `;
+        card.addEventListener("click", () => setGameMode(key));
+        gameModeGrid.appendChild(card);
+      });
+    }
+
+    function updateGameModeSelection() {
+      document.querySelectorAll(".game-mode-card").forEach(card => {
+        card.classList.remove("selected");
+      });
+      if (currentSession && currentSession.game_mode) {
+        const cards = document.querySelectorAll(".game-mode-card");
+        const index = Object.keys(gameModes).indexOf(currentSession.game_mode);
+        if (cards[index]) {
+          cards[index].classList.add("selected");
+        }
+      }
+    }
+
+    async function startGame() {
+      if (!currentSession || !currentSession.game_mode) {
+        alert("Bitte wähle zuerst einen Spielmodus aus");
+        return;
+      }
+
+      if (!currentSessionId) {
+        alert("Fehler: Keine Session-ID vorhanden. Bitte erstelle zuerst eine Session.");
+        return;
+      }
+
+      // Deaktiviere Button sofort, um Doppelklicks zu verhindern
+      btnStartGame.disabled = true;
+      try {
+        const playerCount = currentSession.players ? currentSession.players.length : 0;
+        const data = await apiCall("/api/game/start", "POST", { 
+          game_mode: currentSession.game_mode,
+          player_count: playerCount,
+          session_id: currentSessionId  // Sende Session-ID mit, damit sie im Spiel gespeichert wird
+        });
+
+        if (data.game) {
+          currentGame = data.game;
+          // Prüfe, ob session_id korrekt im Spiel gespeichert wurde
+          if (data.game.session_id !== currentSessionId) {
+            console.warn("Warnung: session_id im Spiel stimmt nicht überein:", data.game.session_id, "vs", currentSessionId);
+          }
+          updateGameUI(); // This will disable btnStartGame when game is active
+          btnEndGame.disabled = false;
+        } else if (data.error) {
+          alert(data.error);
+          // Reaktiviere Button bei Fehler, da kein Spiel gestartet wurde
+          btnStartGame.disabled = false;
+        }
+      } catch (error) {
+        // Reaktiviere Button bei Exception
+        btnStartGame.disabled = false;
+        throw error;
+      }
+    }
+
+    async function endGame() {
+      if (!currentGame) return;
+
+      const data = await apiCall(`/api/game/${currentGame.id}/end`, "POST");
+      if (data.game) {
+        currentGame = null;
+        updateGameUI();
+        btnEndGame.disabled = true;
+        // Lade Abend neu um Spielanzahl zu aktualisieren
+        loadEvening();
+      } else if (data.error) {
+        alert(data.error);
+      }
+    }
+
+    async function loadCurrentGame() {
+      const data = await apiCall("/api/game/current", "GET");
+      if (data.game) {
+        currentGame = data.game;
+        updateGameUI(); // This will handle button states correctly
+        if (currentGame.status === "active") {
+          btnEndGame.disabled = false;
+        }
+      } else {
+        currentGame = null;
+        updateGameUI(); // This will enable btnStartGame when no game is active
+        btnEndGame.disabled = true;
+      }
+    }
+
+    async function restoreSessionFromGame() {
+      // Versuche zuerst, die Session aus dem Spiel wiederherzustellen
+      if (currentGame && currentGame.session_id) {
+        console.log("Versuche Session wiederherzustellen:", currentGame.session_id);
+        // Lade die ursprüngliche Session
+        const sessionData = await apiCall(`/api/session/${currentGame.session_id}`, "GET");
+        if (sessionData.session) {
+          console.log("Session erfolgreich wiederhergestellt:", sessionData.session);
+          currentSessionId = sessionData.session.id;
+          currentSession = sessionData.session;
+          
+          // Lade Game-Modes zuerst, damit sie verfügbar sind
+          await loadGameModes();
+          
+          // Aktualisiere UI - Spielmodus sollte bereits in der Session sein
+          updateSessionUI();
+          updateGameModeSelection();
+          return;
+        } else {
+          console.warn("Session nicht gefunden:", currentGame.session_id, sessionData);
+        }
+        // Wenn Session nicht gefunden wurde (z.B. gelöscht), falle zurück auf neue Session
+        // aber behalte den Spielmodus aus dem Spiel
+      } else {
+        console.log("Keine session_id im Spiel gefunden:", currentGame);
+      }
+      
+      // Fallback: Erstelle eine neue Session mit dem Spielmodus des aktiven Spiels
+      // (nur wenn keine Session-ID im Spiel gespeichert ist oder Session nicht gefunden wurde)
+      console.log("Erstelle neue Session als Fallback");
+      const sessionData = await apiCall("/api/session/create", "POST");
+      if (sessionData.session_id) {
+        currentSessionId = sessionData.session_id;
+        currentSession = sessionData.session;
+        
+        // Lade Game-Modes zuerst, damit sie verfügbar sind
+        await loadGameModes();
+        
+        // Setze den Spielmodus aus dem aktiven Spiel
+        if (currentGame && currentGame.game_mode) {
+          await setGameMode(currentGame.game_mode);
+        }
+        
+        // Aktualisiere UI nach dem Setzen des Spielmodus
+        updateSessionUI();
+      } else if (sessionData.error) {
+        alert(`Fehler beim Wiederherstellen der Session: ${sessionData.error}`);
+      }
+    }
+
+    function updateEveningUI() {
+      if (!currentEvening) {
+        eveningInfo.style.display = "none";
+        return;
+      }
+
+      eveningInfo.style.display = "block";
+      document.getElementById("eveningId").textContent = currentEvening.id.substring(0, 8) + "...";
+      document.getElementById("gameCount").textContent = currentEvening.games ? currentEvening.games.length : 0;
+    }
+
+    function updateSessionUI() {
+      if (!currentSession) {
+        sessionInfo.style.display = "none";
+        playerSection.style.display = "none";
+        gameModeSection.style.display = "none";
+        gameControls.style.display = "none";
+        return;
+      }
+
+      sessionInfo.style.display = "block";
+      document.getElementById("sessionId").textContent = currentSession.id.substring(0, 8) + "...";
+      document.getElementById("playerCount").textContent = currentSession.players ? currentSession.players.length : 0;
+      document.getElementById("gameModeDisplay").textContent = 
+        currentSession.game_mode ? gameModes[currentSession.game_mode]?.name || currentSession.game_mode : "-";
+      
+      const mode = currentSession.game_mode ? gameModes[currentSession.game_mode] : null;
+      if (mode && mode.rounds) {
+        document.getElementById("roundsDisplay").textContent = mode.rounds;
+      } else if (currentSession.game_mode === "SOLI") {
+        document.getElementById("roundsDisplay").textContent = currentSession.players ? currentSession.players.length : "-";
+      } else {
+        document.getElementById("roundsDisplay").textContent = "-";
+      }
+
+      playerSection.style.display = "block";
+      gameModeSection.style.display = "block";
+      gameControls.style.display = "block";
+
+      // Player List
+      if (!currentSession.players || currentSession.players.length === 0) {
+        playerList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <div>Noch keine Spieler hinzugefügt</div>
+          </div>
+        `;
+      } else {
+        // Clear existing content
+        playerList.innerHTML = "";
+        
+        // Create player items using safe DOM methods to prevent XSS
+        currentSession.players.forEach(player => {
+          const playerItem = document.createElement("div");
+          playerItem.className = "player-item";
+          
+          const playerName = document.createElement("span");
+          playerName.className = "player-name";
+          playerName.textContent = player.name; // textContent automatically escapes HTML
+          
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "btn-remove";
+          removeBtn.textContent = "Entfernen";
+          removeBtn.onclick = () => removePlayer(player.id);
+          
+          playerItem.appendChild(playerName);
+          playerItem.appendChild(removeBtn);
+          playerList.appendChild(playerItem);
+        });
+      }
+    }
+
+    function updateGameUI() {
+      if (!currentGame) {
+        currentGameInfo.style.display = "none";
+        btnStartGame.disabled = false;
+        return;
+      }
+
+      currentGameInfo.style.display = "block";
+      document.getElementById("currentGameMode").textContent = 
+        gameModes[currentGame.game_mode]?.name || currentGame.game_mode;
+      document.getElementById("currentGameStatus").textContent = 
+        currentGame.status === "active" ? "Aktiv" : "Abgeschlossen";
+      
+      // Disable start button when game is active
+      btnStartGame.disabled = currentGame.status === "active";
+    }
+
+    // Musik-Steuerung
     function formatTime(seconds) {
       if (!seconds || isNaN(seconds)) return "00:00";
       const mins = Math.floor(seconds / 60);
@@ -193,70 +911,74 @@
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
     
-    // Position aktualisieren
     async function updatePosition() {
       const data = await apiCall("/api/position", "GET");
       if (data.position !== undefined) {
         currentPosition = data.position;
-        totalDuration = data.duration; // Wird intern gespeichert, aber nicht angezeigt
-        
-        // Zeit-Anzeige aktualisieren - nur aktuelle Position
+        // Nur duration setzen, wenn sie auch definiert ist
+        if (data.duration !== undefined) {
+          totalDuration = data.duration;
+        }
         timeDisplay.textContent = formatTime(currentPosition);
       }
     }
 
-    // Status aktualisieren
     async function updateStatus() {
       const data = await apiCall("/api/status", "GET");
       if (data.status) {
         currentStatus = data.status;
-        statusEl.textContent = `Status: ${data.message || statusTexts[data.status] || data.status}`;
+        const statusText = data.message || statusTexts[data.status] || data.status;
+        statusEl.textContent = `Status: ${statusText}`;
+        if (currentStatus === "intro" || currentStatus === "looping") {
+          statusEl.classList.add("active");
+        } else {
+          statusEl.classList.remove("active");
+        }
         updateButtonStates();
       }
     }
 
-    // Button-States aktualisieren
     function updateButtonStates() {
       switch (currentStatus) {
         case "stopped":
           btnStart.disabled = false;
-          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
-          if (btnStart5Min) btnStart5Min.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
-          btnPause.textContent = "Pause";
+          btnPause.textContent = "⏸ Pause";
           break;
         case "intro":
         case "looping":
           btnStart.disabled = true;
-          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
-          if (btnStart5Min) btnStart5Min.disabled = true;
           btnPause.disabled = false;
           btnStop.disabled = false;
-          btnPause.textContent = "Pause";
+          btnPause.textContent = "⏸ Pause";
           break;
         case "paused":
           btnStart.disabled = false;
-          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
-          if (btnStart5Min) btnStart5Min.disabled = false;
           btnPause.disabled = false;
           btnStop.disabled = false;
-          btnPause.textContent = "Weiter";
+          btnPause.textContent = "▶ Weiter";
           break;
         default:
           btnStart.disabled = false;
-          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
-          if (btnStart5Min) btnStart5Min.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
       }
     }
-    
 
-    // Start-Button
+    // Event Listeners
+    btnCreateEvening.addEventListener("click", createEvening);
+    btnAddPlayer.addEventListener("click", addPlayer);
+    playerNameInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        addPlayer();
+      }
+    });
+    btnStartGame.addEventListener("click", startGame);
+    btnEndGame.addEventListener("click", endGame);
+
     btnStart.addEventListener("click", async () => {
       if (currentStatus === "paused") {
-        // Resume
         const data = await apiCall("/api/resume");
         if (data.status) {
           currentStatus = data.status;
@@ -264,7 +986,6 @@
           updateButtonStates();
         }
       } else {
-        // Start von Anfang
         const data = await apiCall("/api/start");
         if (data.status) {
           currentStatus = data.status;
@@ -274,27 +995,10 @@
       }
     });
 
-    // BETA: 5-Minuten-Button auskommentiert für Beta-Release
-    // Zum Aktivieren: Button-Kommentar im HTML entfernen und diesen Block wieder aktivieren
-    /*
-    // Start ab 5 Minuten Button
-    btnStart5Min.addEventListener("click", async () => {
-      const data = await apiCall("/api/start_at", "POST", { position: 300 });
-      if (data.status) {
-        currentStatus = data.status;
-        statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-        updateButtonStates();
-      }
-    });
-    */
-
-    // Pause-Button
     btnPause.addEventListener("click", async () => {
       if (currentStatus === "paused") {
-        // Resume über Start-Button
         btnStart.click();
       } else {
-        // Pause
         const data = await apiCall("/api/pause");
         if (data.status) {
           currentStatus = data.status;
@@ -304,7 +1008,6 @@
       }
     });
 
-    // Stop-Button
     btnStop.addEventListener("click", async () => {
       const data = await apiCall("/api/stop");
       if (data.status) {
@@ -316,12 +1019,10 @@
 
     // Hotkeys
     document.addEventListener("keydown", (e) => {
-      // Ignoriere wenn in Input-Feldern
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
         return;
       }
 
-      // Space = Start/Pause
       if (e.code === "Space") {
         e.preventDefault();
         if (currentStatus === "paused" || currentStatus === "stopped") {
@@ -331,7 +1032,6 @@
         }
       }
 
-      // S = Stop
       if (e.code === "KeyS" && (e.ctrlKey || e.metaKey) === false) {
         e.preventDefault();
         if (currentStatus !== "stopped") {
@@ -340,17 +1040,46 @@
       }
     });
 
-    // Status-Polling starten (alle 500ms)
+    // Polling starten
     statusPollInterval = setInterval(updateStatus, 500);
-    
-    // Position-Polling starten (alle 300ms)
     positionPollInterval = setInterval(updatePosition, 300);
 
-    // Initialer Status
+    // Initialisierung
     updateStatus();
     updateButtonStates();
     updatePosition();
+    
+    // Lade Abend und Spiel, dann stelle Session wieder her falls nötig
+    async function initializePage() {
+      await Promise.all([loadEvening(), loadCurrentGame()]);
+      
+      // Wenn ein Abend existiert
+      if (currentEvening) {
+        // Wenn ein aktives Spiel existiert, versuche IMMER die Session wiederherzustellen
+        if (currentGame && currentGame.status === "active") {
+          await restoreSessionFromGame();
+        } else if (!currentSessionId) {
+          // Wenn kein aktives Spiel, versuche das letzte Spiel zu laden
+          // um die Session wiederherzustellen (auch wenn das Spiel beendet ist)
+          const latestGameData = await apiCall("/api/game/latest", "GET");
+          if (latestGameData.game && latestGameData.game.session_id) {
+            // Verwende das letzte Spiel für die Session-Wiederherstellung
+            const previousGame = currentGame;
+            currentGame = latestGameData.game;
+            await restoreSessionFromGame();
+            // Setze currentGame zurück auf null, wenn es beendet war
+            if (latestGameData.game.status === "completed") {
+              currentGame = previousGame; // Behalte den ursprünglichen Wert (null)
+            }
+          } else {
+            // Wenn kein Spiel mit Session gefunden, erstelle eine neue Session
+            await createSession();
+          }
+        }
+      }
+    }
+    
+    initializePage();
   </script>
 </body>
 </html>
-

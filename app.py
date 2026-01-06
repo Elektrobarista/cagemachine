@@ -1,21 +1,17 @@
 from flask import Flask, render_template, jsonify, request
 from audio_controller import AudioController
-import os
+from config import get_audio_paths, GAME_MODES
+from game_manager import GameManager
+from utils import format_duration, get_game_mode_name
 
 app = Flask(__name__)
 
 # AudioController-Instanz erstellen
-# Prüfe ob .ogg oder .mp3 Dateien vorhanden sind
-intro_path = "static/RageCage_Intro.ogg"
-loop_path = "static/RageCage_Gas.ogg"
-
-if not os.path.exists(intro_path):
-    # Versuche .mp3 als Fallback
-    intro_path = "static/RageCage_Intro.mp3"
-if not os.path.exists(loop_path):
-    loop_path = "static/RageCage_Gas.mp3"
-
+intro_path, loop_path = get_audio_paths()
 audio = AudioController(intro_path=intro_path, loop_path=loop_path)
+
+# GameManager-Instanz erstellen
+game_manager = GameManager()
 
 
 @app.route("/")
@@ -24,6 +20,13 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/statistics")
+def statistics():
+    """Statistik-Seite rendern"""
+    return render_template("statistics.html")
+
+
+# Audio-API-Endpunkte
 @app.route("/api/start", methods=["POST"])
 def start():
     """Startet Audio (Intro → Loop)"""
@@ -121,9 +124,253 @@ def position():
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
+# Evening-API-Endpunkte
+@app.route("/api/evening/create", methods=["POST"])
+def create_evening():
+    """Erstellt einen neuen Abend"""
+    try:
+        evening = game_manager.create_evening()
+        return jsonify({"evening": evening.to_dict()}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/current", methods=["GET"])
+def get_current_evening():
+    """Gibt den aktuellen Abend zurück"""
+    try:
+        evening = game_manager.get_current_evening()
+        if evening:
+            return jsonify({"evening": evening.to_dict()}), 200
+        return jsonify({"evening": None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<evening_id>", methods=["GET"])
+def get_evening(evening_id):
+    """Gibt einen spezifischen Abend zurück"""
+    try:
+        evening = game_manager.get_evening(evening_id)
+        if evening:
+            return jsonify({"evening": evening.to_dict()}), 200
+        return jsonify({"error": "Abend nicht gefunden"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Game-API-Endpunkte
+@app.route("/api/game/start", methods=["POST"])
+def start_game():
+    """Startet ein neues Spiel im aktuellen Abend"""
+    try:
+        data = request.get_json() or {}
+        game_mode = data.get("game_mode", "").upper()
+        player_count = data.get("player_count", 0)
+        session_id = data.get("session_id")
+        
+        if not game_mode:
+            return jsonify({"error": "Spielmodus muss angegeben werden"}), 400
+        
+        if game_mode not in GAME_MODES:
+            return jsonify({"error": "Ungültiger Spielmodus"}), 400
+        
+        evening = game_manager.get_current_evening()
+        if not evening:
+            return jsonify({"error": "Kein aktiver Abend. Bitte erst einen Abend erstellen."}), 400
+        
+        game = game_manager.start_game(evening.id, game_mode, player_count, session_id)
+        return jsonify({"game": game.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/<game_id>/end", methods=["POST"])
+def end_game(game_id):
+    """Beendet ein Spiel manuell"""
+    try:
+        game = game_manager.end_game(game_id)
+        return jsonify({"game": game.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/<game_id>/complete", methods=["POST"])
+def complete_game(game_id):
+    """Markiert ein Spiel als abgeschlossen (alle Runden gespielt)"""
+    try:
+        game = game_manager.complete_game(game_id)
+        return jsonify({"game": game.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/current", methods=["GET"])
+def get_current_game():
+    """Gibt das aktuelle aktive Spiel zurück"""
+    try:
+        evening = game_manager.get_current_evening()
+        if not evening:
+            return jsonify({"game": None}), 200
+        
+        game = game_manager.get_current_game(evening.id)
+        if game:
+            return jsonify({"game": game.to_dict()}), 200
+        return jsonify({"game": None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/latest", methods=["GET"])
+def get_latest_game():
+    """Gibt das letzte Spiel eines Abends zurück (auch wenn beendet)"""
+    try:
+        evening = game_manager.get_current_evening()
+        if not evening:
+            return jsonify({"game": None}), 200
+        
+        game = game_manager.get_latest_game(evening.id)
+        if game:
+            return jsonify({"game": game.to_dict()}), 200
+        return jsonify({"game": None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<evening_id>/games", methods=["GET"])
+def get_games_by_evening(evening_id):
+    """Gibt alle Spiele eines Abends zurück"""
+    try:
+        games = game_manager.get_games_by_evening(evening_id)
+        return jsonify({"games": [g.to_dict() for g in games]}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Session-API-Endpunkte
+@app.route("/api/session/create", methods=["POST"])
+def create_session():
+    """Erstellt eine neue Session"""
+    try:
+        session = game_manager.create_session()
+        return jsonify({"session_id": session.id, "session": session.to_dict()}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/session/current", methods=["GET"])
+def get_current_session():
+    """Gibt die aktuelle Session zurück (für zukünftige Erweiterungen)"""
+    # Aktuell gibt es keine "aktuelle Session" - könnte später implementiert werden
+    return jsonify({"session": None}), 200
+
+
+@app.route("/api/session/<session_id>", methods=["GET"])
+def get_session(session_id):
+    """Gibt eine Session zurück"""
+    try:
+        session = game_manager.get_session(session_id)
+        if session:
+            return jsonify({"session": session.to_dict()}), 200
+        return jsonify({"error": "Session nicht gefunden"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/session/<session_id>/players", methods=["POST"])
+def add_player(session_id):
+    """Fügt einen Spieler zur Session hinzu"""
+    try:
+        data = request.get_json() or {}
+        player_name = data.get("name", "").strip()
+        
+        if not player_name:
+            return jsonify({"error": "Spielername darf nicht leer sein"}), 400
+        
+        session = game_manager.add_player_to_session(session_id, player_name)
+        return jsonify({"session": session.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/session/<session_id>/players/<player_id>", methods=["DELETE"])
+def remove_player(session_id, player_id):
+    """Entfernt einen Spieler aus der Session"""
+    try:
+        session = game_manager.remove_player_from_session(session_id, player_id)
+        return jsonify({"session": session.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/session/<session_id>/game-mode", methods=["POST"])
+def set_session_game_mode(session_id):
+    """Setzt den Spielmodus für eine Session"""
+    try:
+        data = request.get_json() or {}
+        game_mode = data.get("game_mode", "").upper()
+        
+        if not game_mode:
+            return jsonify({"error": "Spielmodus muss angegeben werden"}), 400
+        
+        session = game_manager.set_session_game_mode(session_id, game_mode)
+        return jsonify({"session": session.to_dict(), "game_mode_info": GAME_MODES[game_mode]}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Game-Modes-API
+@app.route("/api/game-modes", methods=["GET"])
+def get_game_modes():
+    """Gibt alle verfügbaren Spielmodi zurück"""
+    return jsonify({"game_modes": GAME_MODES}), 200
+
+
+# Statistik-API
+@app.route("/api/statistics/games", methods=["GET"])
+def get_statistics_games():
+    """Gibt alle abgeschlossenen Spiele für die Statistik zurück"""
+    try:
+        games = game_manager.get_completed_games()
+        
+        # Formatiere Spiele für Frontend
+        formatted_games = []
+        total_duration = 0.0
+        
+        for game in games:
+            formatted_games.append({
+                "id": game.id,
+                "game_mode": game.game_mode,
+                "game_mode_name": get_game_mode_name(game.game_mode),
+                "duration": game.duration,
+                "duration_formatted": format_duration(game.duration) if game.duration else "00:00",
+                "ended_at": game.ended_at.isoformat() if game.ended_at else None,
+                "total_rounds": game.total_rounds
+            })
+            if game.duration:
+                total_duration += game.duration
+        
+        return jsonify({
+            "games": formatted_games,
+            "total_games": len(formatted_games),
+            "total_duration": total_duration,
+            "total_duration_formatted": format_duration(total_duration)
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    # host=0.0.0.0, damit es auch im WLAN auf anderen Geräten geht (optional)
     app.run(host="127.0.0.1", port=8000, debug=False)
-
