@@ -262,18 +262,18 @@ class AudioController:
                     raise
     
     def _transition_to_loop(self):
-        """Queue Loop nahtlos vor Ende des Intros mit Fade-Out, dann starte kontinuierliches Looping"""
+        """Queue Loop nahtlos vor Ende des Intros mit optimiertem Fade-Out, dann starte kontinuierliches Looping"""
         # Überwache Position und queue basierend auf tatsächlicher Playback-Position
         # statt auf get_length() (kann ungenau sein)
         
-        check_interval = 0.05  # Häufigere Checks für präziseren Übergang
+        check_interval = 0.02  # Sehr häufige Checks für präziseren Übergang (20ms)
         intro_duration_estimate = self.intro_duration or 600  # Fallback-Schätzung
         
-        # Fade-Dauer für nahtlosen Übergang (in Sekunden)
-        fade_duration = 0.3  # 0.3 Sekunden Fade
+        # Optimierte Fade-Dauer für nahtloseren Übergang (länger und sanfter)
+        fade_duration = 0.5  # 0.5 Sekunden Fade für sanfteren Übergang
         
-        # Queue Loop früher für besseren Puffer (2-3 Sekunden vor Ende)
-        queue_time_before_end = 2.5
+        # Queue Loop noch früher für maximalen Puffer und nahtloseren Übergang
+        queue_time_before_end = 4.0  # 4 Sekunden vor Ende für mehr Sicherheit
         
         while True:
             time.sleep(check_interval)
@@ -290,7 +290,15 @@ class AudioController:
                         
                         # Queue Loop früher für nahtloseren Übergang
                         if current_pos >= intro_duration_estimate - queue_time_before_end:
+                            # Queue ersten Loop
                             pygame.mixer.music.queue(self.loop_play_path)
+                            # Queue zweiten Loop für noch mehr Sicherheit (falls erster nicht nahtlos genug)
+                            try:
+                                pygame.mixer.music.queue(self.loop_play_path)
+                            except:
+                                # Falls zweites Queue nicht möglich, ist das ok
+                                pass
+                            
                             # Starte Thread für kontinuierliches Looping
                             self.loop_thread = threading.Thread(
                                 target=self._continuous_loop_queue,
@@ -298,9 +306,9 @@ class AudioController:
                             )
                             self.loop_thread.start()
                             
-                            # Starte Fade-Out-Thread kurz vor Ende des Intros
+                            # Starte optimierten Fade-Out-Thread
                             fade_thread = threading.Thread(
-                                target=self._fade_out_intro,
+                                target=self._fade_out_intro_optimized,
                                 args=(fade_duration,),
                                 daemon=True
                             )
@@ -325,13 +333,13 @@ class AudioController:
                         self.current_position = self.intro_duration
                     return
     
-    def _fade_out_intro(self, fade_duration):
-        """Führt einen kurzen manuellen Volume-Fade-Out am Ende des Intros durch"""
-        # Warte bis kurz vor Ende des Intros, dann führe einen manuellen Volume-Fade durch
+    def _fade_out_intro_optimized(self, fade_duration):
+        """Optimierter Volume-Fade-Out am Ende des Intros für nahtloseren Übergang"""
+        # Warte bis kurz vor Ende des Intros, dann führe einen sanften Volume-Fade durch
         if self.intro_duration is None:
             return
         
-        check_interval = 0.01  # Sehr häufige Checks für präzises Timing
+        check_interval = 0.005  # Sehr häufige Checks (5ms) für präzises Timing
         fade_start_time = self.intro_duration - fade_duration
         
         # Hole initiales Volume (Fallback auf 1.0 wenn nicht verfügbar)
@@ -355,20 +363,24 @@ class AudioController:
                     if pos_ms >= 0:
                         current_pos = pos_ms / 1000.0
                         
-                        # Wenn wir kurz vor Ende sind, starte manuellen Volume-Fade
+                        # Wenn wir kurz vor Ende sind, starte optimierten Volume-Fade
                         if current_pos >= fade_start_time and current_pos < self.intro_duration:
                             # Berechne Fade-Progress (0.0 = Anfang, 1.0 = Ende)
                             fade_progress = (current_pos - fade_start_time) / fade_duration
                             fade_progress = min(1.0, max(0.0, fade_progress))
                             
-                            # Fade-Out: Volume von initial_volume auf 0.0
-                            # Aber wir wollen nicht komplett auf 0, sondern auf einen niedrigen Wert
-                            # damit der Übergang nahtloser ist
-                            target_volume = initial_volume * (1.0 - fade_progress * 0.7)  # Fade auf 30% des Originals
+                            # Optimierte Fade-Kurve: Exponentielle Kurve für sanfteren Übergang
+                            # Verwendet eine quadratische Kurve für natürlicheren Fade
+                            fade_curve = fade_progress * fade_progress  # Quadratische Kurve
+                            
+                            # Sanfter Fade-Out: Volume von initial_volume auf 20% (statt 30%)
+                            # für nahtloseren Übergang zum Loop
+                            min_volume_ratio = 0.2  # Fade auf 20% des Originals
+                            target_volume = initial_volume * (1.0 - fade_curve * (1.0 - min_volume_ratio))
                             pygame.mixer.music.set_volume(target_volume)
                             
                             if current_pos >= self.intro_duration:
-                                # Intro ist vorbei, stelle Volume wieder her für Loop
+                                # Intro ist vorbei, stelle Volume sofort wieder her für Loop
                                 pygame.mixer.music.set_volume(initial_volume)
                                 return
                         elif current_pos >= self.intro_duration:
@@ -401,10 +413,10 @@ class AudioController:
             # Fallback: Wenn loop_duration nicht bekannt ist, verwende alte Methode
             return
         
-        check_interval = 0.05  # Häufige Checks für präzises Timing
+        check_interval = 0.02  # Sehr häufige Checks (20ms) für präzises Timing
         loop_started = False
         last_queued_time = None
-        queue_time_before_end = 0.5  # Queue neuen Loop 0.5s vor Ende des aktuellen
+        queue_time_before_end = 0.8  # Queue neuen Loop 0.8s vor Ende für mehr Sicherheit
         
         while True:
             time.sleep(check_interval)
