@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Turnier Musik</title>
+  <title>Rage Cage</title>
   <style>
     body { 
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
@@ -117,11 +117,13 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Turnier Musik</h1>
+    <h1>Rage Cage</h1>
 
     <div>
       <button id="btnStart">Start</button>
-      <button id="btnStart5Min">Start ab 5 Min</button>
+      <!-- BETA: 5-Minuten-Button auskommentiert für Beta-Release -->
+      <!-- Zum Aktivieren: Kommentar entfernen und btnStart5Min in updateButtonStates() wieder aktivieren -->
+      <!-- <button id="btnStart5Min">Start ab 5 Min</button> -->
       <button id="btnPause" disabled>Pause</button>
       <button id="btnStop" disabled>Stop</button>
     </div>
@@ -130,12 +132,8 @@
     
     <div class="scrubber-container">
       <div class="scrubber-wrapper">
-        <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+        <span class="time-display" id="timeDisplay">00:00</span>
       </div>
-    </div>
-    
-    <div class="hint">
-      Audio-Dateien werden vom Server konfiguriert. Prüfe <code>app.py</code> für Dateinamen.
     </div>
   </div>
 
@@ -144,7 +142,8 @@
     const API_BASE = "";
     
     const btnStart = document.getElementById("btnStart");
-    const btnStart5Min = document.getElementById("btnStart5Min");
+    // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
+    const btnStart5Min = document.getElementById("btnStart5Min"); // Kann null sein wenn Button auskommentiert ist
     const btnPause = document.getElementById("btnPause");
     const btnStop = document.getElementById("btnStop");
     const statusEl = document.getElementById("status");
@@ -197,12 +196,12 @@
     // Position aktualisieren
     async function updatePosition() {
       const data = await apiCall("/api/position", "GET");
-      if (data.position !== undefined && data.duration !== undefined) {
+      if (data.position !== undefined) {
         currentPosition = data.position;
-        totalDuration = data.duration;
+        totalDuration = data.duration; // Wird intern gespeichert, aber nicht angezeigt
         
-        // Zeit-Anzeige aktualisieren
-        timeDisplay.textContent = `${formatTime(currentPosition)} / ${formatTime(totalDuration)}`;
+        // Zeit-Anzeige aktualisieren - nur aktuelle Position
+        timeDisplay.textContent = formatTime(currentPosition);
       }
     }
 
@@ -221,7 +220,8 @@
       switch (currentStatus) {
         case "stopped":
           btnStart.disabled = false;
-          btnStart5Min.disabled = false;
+          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
+          if (btnStart5Min) btnStart5Min.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
           btnPause.textContent = "Pause";
@@ -229,21 +229,24 @@
         case "intro":
         case "looping":
           btnStart.disabled = true;
-          btnStart5Min.disabled = true;
+          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
+          if (btnStart5Min) btnStart5Min.disabled = true;
           btnPause.disabled = false;
           btnStop.disabled = false;
           btnPause.textContent = "Pause";
           break;
         case "paused":
           btnStart.disabled = false;
-          btnStart5Min.disabled = false;
+          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
+          if (btnStart5Min) btnStart5Min.disabled = false;
           btnPause.disabled = false;
           btnStop.disabled = false;
           btnPause.textContent = "Weiter";
           break;
         default:
           btnStart.disabled = false;
-          btnStart5Min.disabled = false;
+          // BETA: 5-Minuten-Button auskommentiert - zum Aktivieren Kommentar entfernen
+          if (btnStart5Min) btnStart5Min.disabled = false;
           btnPause.disabled = true;
           btnStop.disabled = true;
       }
@@ -271,6 +274,9 @@
       }
     });
 
+    // BETA: 5-Minuten-Button auskommentiert für Beta-Release
+    // Zum Aktivieren: Button-Kommentar im HTML entfernen und diesen Block wieder aktivieren
+    /*
     // Start ab 5 Minuten Button
     btnStart5Min.addEventListener("click", async () => {
       const data = await apiCall("/api/start_at", "POST", { position: 300 });
@@ -280,6 +286,7 @@
         updateButtonStates();
       }
     });
+    */
 
     // Pause-Button
     btnPause.addEventListener("click", async () => {
