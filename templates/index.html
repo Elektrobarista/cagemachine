@@ -242,6 +242,20 @@
       color: white;
     }
 
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      font-size: 18px;
+      padding: 20px 24px;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
+    }
+
     .status {
       margin-top: 16px;
       padding: 16px;
@@ -380,12 +394,20 @@
         <button class="btn-music btn-stop" id="btnStop" disabled>⏹ Stop</button>
       </div>
 
+      <div style="margin-top: 24px; display: none;" id="headstartContainer">
+        <button class="btn-music btn-danger" id="btnHeadstart" style="width: 100%;">⚠️ DANGER! Headstart DANGER! ⚠️</button>
+      </div>
+
       <div class="status" id="status">Status: bereit</div>
       
       <div class="scrubber-container">
         <div class="scrubber-wrapper">
           <span class="time-display" id="timeDisplay">00:00</span>
         </div>
+      </div>
+
+      <div style="text-align: right; margin-top: 16px;">
+        <a href="#" id="linkShowHeadstart" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 500; display: none;">Ich weiß was ich mache!</a>
       </div>
     </div>
   </div>
@@ -407,6 +429,9 @@
     const btnStart = document.getElementById("btnStart");
     const btnPause = document.getElementById("btnPause");
     const btnStop = document.getElementById("btnStop");
+    const btnHeadstart = document.getElementById("btnHeadstart");
+    const headstartContainer = document.getElementById("headstartContainer");
+    const linkShowHeadstart = document.getElementById("linkShowHeadstart");
     const statusEl = document.getElementById("status");
     const timeDisplay = document.getElementById("timeDisplay");
 
@@ -770,6 +795,32 @@
         updateButtonStates();
       }
     });
+
+    btnHeadstart.addEventListener("click", async () => {
+      // Starte bei 2:45 Minuten (165 Sekunden)
+      const headstartPosition = 165;
+      const data = await apiCall("/api/start_at", "POST", { position: headstartPosition });
+      if (data.status) {
+        currentStatus = data.status;
+        statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+        updateButtonStates();
+      } else if (data.error) {
+        alert(data.error);
+      }
+    });
+
+    // Link "Ich weiß was ich mache!" - zeigt/versteckt den Headstart-Button
+    linkShowHeadstart.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (headstartContainer.style.display === "none") {
+        headstartContainer.style.display = "block";
+      } else {
+        headstartContainer.style.display = "none";
+      }
+    });
+
+    // Zeige den Link standardmäßig an
+    linkShowHeadstart.style.display = "inline-block";
 
     // Hotkeys
     document.addEventListener("keydown", (e) => {
