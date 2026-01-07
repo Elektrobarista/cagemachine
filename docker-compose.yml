@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  cagemachine:
+    build: .
+    container_name: cagemachine
+    ports:
+      - "3000:3000"
+    volumes:
+      # Optional: Mount static files wenn du sie ändern willst ohne Rebuild
+      - ./static:/app/static:ro
+    environment:
+      - FLASK_ENV=production
+      - FLASK_HOST=0.0.0.0
+      - FLASK_PORT=3000
+    restart: unless-stopped
+
