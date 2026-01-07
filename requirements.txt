@@ -4,3 +4,6 @@ flask>=3.0.0
 # Audio Playback
 pygame>=2.5.0
 
+# Environment Variables
+python-dotenv>=1.0.0
+

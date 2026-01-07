@@ -1,9 +1,10 @@
 """Business-Logik für Spiel- und Abend-Management"""
 from typing import Optional, List
 from datetime import datetime
-from models import Evening, Game, Session, Player
+from models import Evening, Game, Session, Player, Round
 from utils import calculate_duration
-from config import GAME_MODES
+from config import GAME_MODES, TEST_MODE
+import random
 
 
 class GameManager:
@@ -15,6 +16,9 @@ class GameManager:
         self.games = {}  # game_id -> Game
         self.sessions = {}  # session_id -> Session
         self.current_evening_id = None
+        self.rounds = {}  # round_id -> Round
+        self.game_rounds = {}  # game_id -> List[round_id]
+        self.current_round = {}  # game_id -> round_id
     
     # Evening-Management
     def create_evening(self) -> Evening:
@@ -210,4 +214,109 @@ class GameManager:
         session.game_mode = game_mode
         
         return session
+    
+    # Round-Management
+    def start_round(self, game_id: str) -> Round:
+        """
+        Startet eine neue Runde für ein Spiel
+        
+        Args:
+            game_id: ID des Spiels
+        
+        Returns:
+            Round: Die erstellte Runde
+        """
+        if game_id not in self.games:
+            raise ValueError(f"Spiel {game_id} nicht gefunden")
+        
+        game = self.games[game_id]
+        
+        # Bestimme aktuelle Runden-Nummer
+        existing_rounds = self.game_rounds.get(game_id, [])
+        round_number = len(existing_rounds) + 1
+        
+        # KEINE Timer-Dauer beim Start - Timer wird erst nach Rundenende gesetzt
+        # Erstelle neue Runde OHNE timer_duration
+        round_obj = Round.create(game_id, round_number, timer_duration=None)
+        self.rounds[round_obj.id] = round_obj
+        
+        # Füge Runde zum Spiel hinzu
+        if game_id not in self.game_rounds:
+            self.game_rounds[game_id] = []
+        self.game_rounds[game_id].append(round_obj.id)
+        self.current_round[game_id] = round_obj.id
+        
+        return round_obj
+    
+    def end_round(self, game_id: str) -> Round:
+        """
+        Beendet die aktuelle Runde eines Spiels und setzt Timer für nächste Runde (falls RND-Modus)
+        
+        Args:
+            game_id: ID des Spiels
+        
+        Returns:
+            Round: Die beendete Runde (mit timer_duration, falls RND-Modus)
+        """
+        if game_id not in self.current_round:
+            raise ValueError(f"Keine aktive Runde für Spiel {game_id}")
+        
+        round_id = self.current_round[game_id]
+        if round_id not in self.rounds:
+            raise ValueError(f"Runde {round_id} nicht gefunden")
+        
+        round_obj = self.rounds[round_id]
+        round_obj.ended_at = datetime.now()
+        
+        # Berechne Timer-Dauer für die NÄCHSTE Runde (nur im RND-Modus)
+        game = self.games[game_id]
+        if game.game_mode == "RND":
+            timer_duration = self._calculate_timer_duration(game.game_mode)
+            round_obj.timer_duration = timer_duration
+            if timer_duration:
+                from datetime import timedelta
+                round_obj.timer_ends_at = datetime.now() + timedelta(seconds=timer_duration)
+        
+        # Entferne aus current_round
+        del self.current_round[game_id]
+        
+        return round_obj
+    
+    def get_current_round(self, game_id: str) -> Optional[Round]:
+        """Gibt die aktuelle Runde eines Spiels zurück"""
+        if game_id not in self.current_round:
+            return None
+        round_id = self.current_round[game_id]
+        return self.rounds.get(round_id)
+    
+    def get_rounds_by_game(self, game_id: str) -> List[Round]:
+        """Gibt alle Runden eines Spiels zurück"""
+        round_ids = self.game_rounds.get(game_id, [])
+        return [self.rounds[rid] for rid in round_ids if rid in self.rounds]
+    
+    def _calculate_timer_duration(self, game_mode: str) -> Optional[float]:
+        """
+        Berechnet die Timer-Dauer basierend auf Spielmodus
+        
+        Args:
+            game_mode: Spielmodus (RND, SOLI, THUNDERSTORM)
+        
+        Returns:
+            Timer-Dauer in Sekunden oder None
+        """
+        if game_mode == "RND":
+            if TEST_MODE:
+                # Test: 10-20 Sekunden
+                return random.uniform(10, 20)
+            else:
+                # Produktion: 5-20 Minuten (300-1200 Sekunden)
+                return random.uniform(300, 1200)
+        elif game_mode == "THUNDERSTORM":
+            # Back to Back: Kein Timer zwischen Runden
+            return None
+        elif game_mode == "SOLI":
+            # Soli: Kein automatischer Timer (manuell gesteuert)
+            return None
+        else:
+            return None
 

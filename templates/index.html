@@ -429,6 +429,24 @@
         </div>
       </div>
 
+      <div id="roundInfo" class="session-info" style="display: none;">
+        <div class="session-info-item">
+          <span class="session-info-label">Aktuelle Runde:</span>
+          <span class="session-info-value" id="currentRoundNumber">-</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-info-label">Timer:</span>
+          <span class="session-info-value" id="timerDisplay">-</span>
+        </div>
+      </div>
+
+      <div id="roundControls" style="display: none;">
+        <div class="game-controls">
+          <button class="btn btn-game btn-game-start" id="btnStartRound">Runde starten</button>
+          <button class="btn btn-game btn-game-end" id="btnEndRound" disabled>Runde beenden</button>
+        </div>
+      </div>
+
       <div id="playerSection" style="display: none;">
         <div class="section-title">Spieler hinzufügen</div>
         <div class="player-input-group">
@@ -502,6 +520,10 @@
     const gameModeGrid = document.getElementById("gameModeGrid");
     const btnStartGame = document.getElementById("btnStartGame");
     const btnEndGame = document.getElementById("btnEndGame");
+    const roundInfo = document.getElementById("roundInfo");
+    const roundControls = document.getElementById("roundControls");
+    const btnStartRound = document.getElementById("btnStartRound");
+    const btnEndRound = document.getElementById("btnEndRound");
     
     const btnStart = document.getElementById("btnStart");
     const btnPause = document.getElementById("btnPause");
@@ -515,10 +537,12 @@
     let currentSessionId = null;
     let currentSession = null;
     let currentGame = null;
+    let currentRound = null;
     let gameModes = {};
     let currentStatus = "stopped";
     let statusPollInterval = null;
     let positionPollInterval = null;
+    let timerPollInterval = null;
     let currentPosition = 0;
     let totalDuration = 0;
 
@@ -722,6 +746,15 @@
           }
           updateGameUI(); // This will disable btnStartGame when game is active
           btnEndGame.disabled = false;
+          // Starte automatisch erste Runde für RND-Modus
+          if (currentGame.game_mode === "RND") {
+            try {
+              await startRound();
+            } catch (error) {
+              console.error("Fehler beim automatischen Start der ersten Runde:", error);
+              // Spiel wurde trotzdem gestartet, nur die Runde konnte nicht gestartet werden
+            }
+          }
         } else if (data.error) {
           alert(data.error);
           // Reaktiviere Button bei Fehler, da kein Spiel gestartet wurde
@@ -740,8 +773,10 @@
       const data = await apiCall(`/api/game/${currentGame.id}/end`, "POST");
       if (data.game) {
         currentGame = null;
+        currentRound = null;  // WICHTIG: Runde auch zurücksetzen
         updateGameUI();
         btnEndGame.disabled = true;
+        stopTimerPolling();  // Timer-Polling stoppen
         // Lade Abend neu um Spielanzahl zu aktualisieren
         loadEvening();
       } else if (data.error) {
@@ -889,7 +924,10 @@
     function updateGameUI() {
       if (!currentGame) {
         currentGameInfo.style.display = "none";
+        roundInfo.style.display = "none";
+        roundControls.style.display = "none";
         btnStartGame.disabled = false;
+        stopTimerPolling();
         return;
       }
 
@@ -899,8 +937,198 @@
       document.getElementById("currentGameStatus").textContent = 
         currentGame.status === "active" ? "Aktiv" : "Abgeschlossen";
       
-      // Disable start button when game is active
       btnStartGame.disabled = currentGame.status === "active";
+      
+      // Lade aktuelle Runde, wenn Spiel aktiv ist
+      if (currentGame.status === "active") {
+        loadCurrentRound();
+      } else {
+        roundInfo.style.display = "none";
+        roundControls.style.display = "none";
+        stopTimerPolling();
+      }
+    }
+
+    async function startRound() {
+      if (!currentGame) return;
+      
+      // Prüfe ob bereits eine Runde läuft
+      if (currentRound && currentRound.round_number) {
+        console.warn("Eine Runde läuft bereits");
+        return;
+      }
+      
+      btnStartRound.disabled = true;
+      try {
+        const data = await apiCall(`/api/game/${currentGame.id}/round/start`, "POST");
+        if (data.round) {
+          currentRound = data.round;
+          updateRoundUI();
+          btnEndRound.disabled = false;
+          // KEIN Timer-Polling während Runde - Timer startet erst nach Rundenende
+        } else if (data.error) {
+          alert(data.error);
+          btnStartRound.disabled = false;
+        }
+      } catch (error) {
+        console.error("Fehler beim Starten der Runde:", error);
+        btnStartRound.disabled = false;
+        throw error;
+      }
+    }
+
+    async function endRound() {
+      if (!currentGame) return;
+      
+      btnEndRound.disabled = true;
+      try {
+        const data = await apiCall(`/api/game/${currentGame.id}/round/end`, "POST");
+        if (data.round) {
+          // Runde beendet - Timer sollte jetzt starten (falls RND-Modus)
+          currentRound = null;
+          // Lade Timer-Status neu (Timer startet nach Rundenende)
+          await loadCurrentRound();
+          btnStartRound.disabled = false;
+        } else if (data.error) {
+          alert(data.error);
+          btnEndRound.disabled = false;
+        }
+      } catch (error) {
+        btnEndRound.disabled = false;
+        throw error;
+      }
+    }
+
+    async function loadCurrentRound() {
+      if (!currentGame) return;
+      
+      try {
+        const data = await apiCall(`/api/game/${currentGame.id}/round/current`, "GET");
+        if (data.round) {
+          currentRound = data.round;
+        } else {
+          currentRound = null;
+        }
+        
+        // Prüfe Timer-Status (auch wenn keine Runde aktiv ist - Timer läuft zwischen Runden)
+        const timerData = await apiCall(`/api/game/${currentGame.id}/timer/remaining`, "GET");
+        if (timerData.remaining !== null && timerData.remaining !== undefined && timerData.remaining > 0) {
+          // Timer läuft zwischen Runden
+          if (!currentRound) {
+            // Erstelle temporäres Round-Objekt für Timer-Anzeige
+            currentRound = { timer_remaining: timerData.remaining };
+          } else {
+            currentRound.timer_remaining = timerData.remaining;
+          }
+          startTimerPolling();
+        } else {
+          // Kein Timer aktiv
+          if (currentRound) {
+            currentRound.timer_remaining = null;
+          }
+          stopTimerPolling();
+        }
+        
+        updateRoundUI();
+      } catch (error) {
+        console.error("Fehler beim Laden der aktuellen Runde:", error);
+        currentRound = null;
+        updateRoundUI();
+      }
+    }
+
+    function updateRoundUI() {
+      // Wenn kein Spiel aktiv ist, verstecke alles
+      if (!currentGame) {
+        roundInfo.style.display = "none";
+        roundControls.style.display = "none";
+        btnStartRound.disabled = false;
+        btnEndRound.disabled = true;
+        return;
+      }
+
+      // Wenn Spiel aktiv ist, zeige immer die Rundenansicht
+      roundInfo.style.display = "block";
+      roundControls.style.display = "block";
+
+      // Prüfe ob eine Runde aktiv ist (hat round_number)
+      const hasActiveRound = currentRound && currentRound.round_number;
+      
+      if (!hasActiveRound) {
+        // Keine aktive Runde - prüfe ob Timer zwischen Runden läuft
+        if (currentRound && currentRound.timer_remaining !== null && currentRound.timer_remaining !== undefined && currentRound.timer_remaining > 0) {
+          // Timer läuft zwischen Runden
+          document.getElementById("currentRoundNumber").textContent = "-";
+          document.getElementById("timerDisplay").textContent = formatTime(currentRound.timer_remaining);
+          btnStartRound.disabled = true;  // Warte bis Timer abgelaufen ist
+          btnEndRound.disabled = true;
+        } else {
+          // Keine aktive Runde und kein Timer
+          document.getElementById("currentRoundNumber").textContent = "-";
+          document.getElementById("timerDisplay").textContent = "Keine aktive Runde";
+          btnStartRound.disabled = false;
+          btnEndRound.disabled = true;
+        }
+        return;
+      }
+
+      // Aktive Runde vorhanden - zeige Runden-Info
+      document.getElementById("currentRoundNumber").textContent = currentRound.round_number;
+      
+      // Während einer Runde läuft KEIN Timer - Timer startet erst nach Rundenende
+      document.getElementById("timerDisplay").textContent = "Runde läuft";
+      
+      // Button-Status aktualisieren
+      btnStartRound.disabled = true;  // Runde läuft bereits
+      btnEndRound.disabled = false;   // Kann beendet werden
+    }
+
+    function startTimerPolling() {
+      if (timerPollInterval) return;
+      timerPollInterval = setInterval(async () => {
+        if (!currentGame) {
+          stopTimerPolling();
+          return;
+        }
+        
+        const data = await apiCall(`/api/game/${currentGame.id}/timer/remaining`, "GET");
+        if (data.remaining !== null && data.remaining !== undefined) {
+          // Timer läuft zwischen Runden
+          if (!currentRound) {
+            currentRound = { timer_remaining: data.remaining };
+          } else {
+            currentRound.timer_remaining = data.remaining;
+          }
+          updateRoundUI();
+          
+          if (data.remaining <= 0) {
+            // Timer abgelaufen - Musik sollte automatisch gestartet sein
+            stopTimerPolling();
+            if (currentRound) {
+              currentRound.timer_remaining = 0;
+            }
+            // Lade Runden-Status neu (Timer ist abgelaufen, Runde kann gestartet werden)
+            loadCurrentRound();
+          }
+        } else {
+          // Kein Timer aktiv
+          if (currentRound && !currentRound.round_number) {
+            // Nur Timer-Objekt ohne Runde - entferne es
+            currentRound = null;
+          } else if (currentRound) {
+            currentRound.timer_remaining = null;
+          }
+          stopTimerPolling();
+          updateRoundUI();
+        }
+      }, 500); // Poll alle 500ms
+    }
+
+    function stopTimerPolling() {
+      if (timerPollInterval) {
+        clearInterval(timerPollInterval);
+        timerPollInterval = null;
+      }
     }
 
     // Musik-Steuerung
@@ -976,6 +1204,8 @@
     });
     btnStartGame.addEventListener("click", startGame);
     btnEndGame.addEventListener("click", endGame);
+    btnStartRound.addEventListener("click", startRound);
+    btnEndRound.addEventListener("click", endRound);
 
     btnStart.addEventListener("click", async () => {
       if (currentStatus === "paused") {
@@ -1058,6 +1288,8 @@
         // Wenn ein aktives Spiel existiert, versuche IMMER die Session wiederherzustellen
         if (currentGame && currentGame.status === "active") {
           await restoreSessionFromGame();
+          // Bug Fix 1: Aktualisiere Game-UI nach Session-Wiederherstellung
+          updateGameUI();
         } else if (!currentSessionId) {
           // Wenn kein aktives Spiel, versuche das letzte Spiel zu laden
           // um die Session wiederherzustellen (auch wenn das Spiel beendet ist)
@@ -1067,10 +1299,12 @@
             const previousGame = currentGame;
             currentGame = latestGameData.game;
             await restoreSessionFromGame();
-            // Setze currentGame zurück auf null, wenn es beendet war
+            // Bug Fix 2: Aktualisiere Game-UI immer, unabhängig vom Status
             if (latestGameData.game.status === "completed") {
               currentGame = previousGame; // Behalte den ursprünglichen Wert (null)
             }
+            // WICHTIG: Aktualisiere UI nach Session-Wiederherstellung (für beide Status)
+            updateGameUI();
           } else {
             // Wenn kein Spiel mit Session gefunden, erstelle eine neue Session
             await createSession();

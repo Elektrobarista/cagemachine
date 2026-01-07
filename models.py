@@ -118,3 +118,42 @@ class Game:
             "session_id": self.session_id
         }
 
+
+@dataclass
+class Round:
+    """Runden-Modell"""
+    id: str
+    game_id: str
+    round_number: int
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    timer_duration: Optional[float] = None  # Timer-Dauer in Sekunden
+    timer_ends_at: Optional[datetime] = None  # Wann der Timer abläuft
+    
+    @classmethod
+    def create(cls, game_id: str, round_number: int, timer_duration: Optional[float] = None):
+        """Erstellt eine neue Runde"""
+        from datetime import timedelta
+        round_obj = cls(
+            id=str(uuid.uuid4()),
+            game_id=game_id,
+            round_number=round_number,
+            started_at=datetime.now(),
+            timer_duration=timer_duration
+        )
+        if timer_duration:
+            round_obj.timer_ends_at = datetime.now() + timedelta(seconds=timer_duration)
+        return round_obj
+    
+    def to_dict(self):
+        """Konvertiert Round zu Dictionary für JSON-Serialisierung"""
+        return {
+            "id": self.id,
+            "game_id": self.game_id,
+            "round_number": self.round_number,
+            "started_at": self.started_at.isoformat(),
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "timer_duration": self.timer_duration,
+            "timer_ends_at": self.timer_ends_at.isoformat() if self.timer_ends_at else None
+        }
+

@@ -1,6 +1,13 @@
 """Konfiguration für die Rage Cage Anwendung"""
 import os
 
+# Timer-Konfiguration
+# Kann über Umgebungsvariable RAGE_CAGE_TEST_MODE überschrieben werden
+# Setze auf False für Produktion (5-20 Minuten Timer)
+# Setze auf True für Tests (10-20 Sekunden Timer)
+# Default: True (für Tests)
+TEST_MODE = os.getenv("RAGE_CAGE_TEST_MODE", "True").lower() in ("true", "1", "yes")
+
 # Spielmodi-Konfiguration
 GAME_MODES = {
     "RND": {

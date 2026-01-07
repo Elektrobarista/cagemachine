@@ -1,8 +1,13 @@
 from flask import Flask, render_template, jsonify, request
+from dotenv import load_dotenv
 from audio_controller import AudioController
 from config import get_audio_paths, GAME_MODES
 from game_manager import GameManager
 from utils import format_duration, get_game_mode_name
+from timer_service import TimerService
+
+# Lade Umgebungsvariablen aus .env Datei
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -12,6 +17,10 @@ audio = AudioController(intro_path=intro_path, loop_path=loop_path)
 
 # GameManager-Instanz erstellen
 game_manager = GameManager()
+
+# TimerService-Instanz erstellen
+timer_service = TimerService(audio)
+timer_service.start()  # Starte Timer-Service
 
 
 @app.route("/")
@@ -191,6 +200,18 @@ def start_game():
 def end_game(game_id):
     """Beendet ein Spiel manuell"""
     try:
+        # Bricht Timer ab, falls aktiv (wichtig: vor dem Beenden des Spiels)
+        timer_service.cancel_timer(game_id)
+        
+        # Beende aktive Runde, falls vorhanden
+        try:
+            current_round = game_manager.get_current_round(game_id)
+            if current_round:
+                game_manager.end_round(game_id)
+        except ValueError:
+            # Keine aktive Runde vorhanden, das ist ok
+            pass
+        
         game = game_manager.end_game(game_id)
         return jsonify({"game": game.to_dict()}), 200
     except ValueError as e:
@@ -368,6 +389,82 @@ def get_statistics_games():
             "total_duration": total_duration,
             "total_duration_formatted": format_duration(total_duration)
         }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Round-API-Endpunkte
+@app.route("/api/game/<game_id>/round/start", methods=["POST"])
+def start_round(game_id):
+    """Startet eine neue Runde"""
+    try:
+        round_obj = game_manager.start_round(game_id)
+        
+        # KEIN Timer beim Rundenstart - Timer wird erst nach Rundenende gesetzt
+        # (Erste Runde hat keinen Timer, Timer startet erst nach Ende der ersten Runde)
+        
+        return jsonify({"round": round_obj.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/<game_id>/round/end", methods=["POST"])
+def end_round(game_id):
+    """Beendet die aktuelle Runde"""
+    try:
+        # Bricht Timer ab, falls aktiv (wichtig: vor dem Beenden der Runde)
+        timer_service.cancel_timer(game_id)
+        
+        # Beende Runde (berechnet Timer-Dauer für nächste Runde, falls RND-Modus)
+        round_obj = game_manager.end_round(game_id)
+        
+        # Setze Timer, falls vorhanden (nur im RND-Modus, nach Rundenende)
+        if round_obj.timer_duration:
+            timer_service.set_timer(game_id, round_obj.timer_duration)
+        
+        return jsonify({"round": round_obj.to_dict()}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/<game_id>/round/current", methods=["GET"])
+def get_current_round(game_id):
+    """Gibt die aktuelle Runde zurück"""
+    try:
+        round_obj = game_manager.get_current_round(game_id)
+        if round_obj:
+            # Füge verbleibende Timer-Zeit hinzu
+            remaining_time = timer_service.get_remaining_time(game_id)
+            round_dict = round_obj.to_dict()
+            round_dict["timer_remaining"] = remaining_time
+            return jsonify({"round": round_dict}), 200
+        return jsonify({"round": None}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/<game_id>/rounds", methods=["GET"])
+def get_rounds(game_id):
+    """Gibt alle Runden eines Spiels zurück"""
+    try:
+        rounds = game_manager.get_rounds_by_game(game_id)
+        return jsonify({"rounds": [r.to_dict() for r in rounds]}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/game/<game_id>/timer/remaining", methods=["GET"])
+def get_timer_remaining(game_id):
+    """Gibt die verbleibende Timer-Zeit zurück"""
+    try:
+        remaining = timer_service.get_remaining_time(game_id)
+        if remaining is not None:
+            return jsonify({"remaining": remaining}), 200
+        return jsonify({"remaining": None}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

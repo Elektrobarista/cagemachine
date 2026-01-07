@@ -183,11 +183,24 @@
           options.body = JSON.stringify(body);
         }
         const response = await fetch(`${API_BASE}${endpoint}`, options);
+        
+        // Prüfe ob Response erfolgreich war
+        if (!response.ok) {
+          // Versuche JSON-Fehler zu lesen, sonst generischer Fehler
+          try {
+            const errorData = await response.json();
+            return errorData;
+          } catch {
+            return { error: `HTTP ${response.status}: ${response.statusText}` };
+          }
+        }
+        
         const data = await response.json();
         return data;
       } catch (error) {
         console.error("API-Fehler:", error);
-        return { error: "Netzwerk-Fehler" };
+        // Gebe konsistentes Fehlerformat zurück, das von allen Handlern erwartet wird
+        return { error: "Netzwerk-Fehler: " + (error.message || "Verbindung zum Server fehlgeschlagen") };
       }
     }
 
