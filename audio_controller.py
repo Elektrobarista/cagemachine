@@ -348,6 +348,11 @@ class AudioController:
         except:
             initial_volume = 1.0
         
+        # Timeout-Schutz: Stelle Volume nach maximal fade_duration + 0.5 Sekunden wieder her
+        max_fade_time = fade_duration + 0.5
+        fade_start_wall_time = None
+        volume_restored = False
+        
         # Warte bis Fade-Start-Zeit erreicht ist
         while True:
             time.sleep(check_interval)
@@ -355,7 +360,12 @@ class AudioController:
             with self.lock:
                 if self.state != "looping":
                     # State hat sich geändert, stelle Volume wieder her und beende
-                    pygame.mixer.music.set_volume(initial_volume)
+                    if not volume_restored:
+                        try:
+                            pygame.mixer.music.set_volume(initial_volume)
+                        except:
+                            pass
+                        volume_restored = True
                     return
                 
                 try:
@@ -365,6 +375,10 @@ class AudioController:
                         
                         # Wenn wir kurz vor Ende sind, starte optimierten Volume-Fade
                         if current_pos >= fade_start_time and current_pos < self.intro_duration:
+                            # Merke Start-Zeit des Fade-Outs
+                            if fade_start_wall_time is None:
+                                fade_start_wall_time = time.time()
+                            
                             # Berechne Fade-Progress (0.0 = Anfang, 1.0 = Ende)
                             fade_progress = (current_pos - fade_start_time) / fade_duration
                             fade_progress = min(1.0, max(0.0, fade_progress))
@@ -377,22 +391,75 @@ class AudioController:
                             # für nahtloseren Übergang zum Loop
                             min_volume_ratio = 0.2  # Fade auf 20% des Originals
                             target_volume = initial_volume * (1.0 - fade_curve * (1.0 - min_volume_ratio))
-                            pygame.mixer.music.set_volume(target_volume)
+                            try:
+                                pygame.mixer.music.set_volume(target_volume)
+                            except:
+                                pass
+                            
+                            # Timeout-Check: Wenn zu viel Zeit vergangen ist, stelle Volume wieder her
+                            if fade_start_wall_time is not None:
+                                elapsed_fade_time = time.time() - fade_start_wall_time
+                                if elapsed_fade_time >= max_fade_time:
+                                    if not volume_restored:
+                                        try:
+                                            pygame.mixer.music.set_volume(initial_volume)
+                                        except:
+                                            pass
+                                        volume_restored = True
+                                    return
                             
                             if current_pos >= self.intro_duration:
                                 # Intro ist vorbei, stelle Volume sofort wieder her für Loop
-                                pygame.mixer.music.set_volume(initial_volume)
+                                if not volume_restored:
+                                    try:
+                                        pygame.mixer.music.set_volume(initial_volume)
+                                    except:
+                                        pass
+                                    volume_restored = True
                                 return
                         elif current_pos >= self.intro_duration:
                             # Intro ist bereits vorbei, stelle Volume wieder her
-                            pygame.mixer.music.set_volume(initial_volume)
+                            if not volume_restored:
+                                try:
+                                    pygame.mixer.music.set_volume(initial_volume)
+                                except:
+                                    pass
+                                volume_restored = True
                             return
+                        elif fade_start_wall_time is not None:
+                            # Fade wurde gestartet, aber Position ist wieder kleiner (Loop läuft)
+                            # Stelle Volume sofort wieder her
+                            elapsed_fade_time = time.time() - fade_start_wall_time
+                            if elapsed_fade_time >= fade_duration:
+                                if not volume_restored:
+                                    try:
+                                        pygame.mixer.music.set_volume(initial_volume)
+                                    except:
+                                        pass
+                                    volume_restored = True
+                                return
                 except:
+                    # Bei Fehler: Stelle Volume sicherheitshalber wieder her nach Timeout
+                    if fade_start_wall_time is not None:
+                        elapsed_fade_time = time.time() - fade_start_wall_time
+                        if elapsed_fade_time >= max_fade_time:
+                            if not volume_restored:
+                                try:
+                                    pygame.mixer.music.set_volume(initial_volume)
+                                except:
+                                    pass
+                                volume_restored = True
+                            return
                     pass
                 
                 # Wenn Musik gestoppt ist, stelle Volume wieder her und beende
                 if not pygame.mixer.music.get_busy():
-                    pygame.mixer.music.set_volume(initial_volume)
+                    if not volume_restored:
+                        try:
+                            pygame.mixer.music.set_volume(initial_volume)
+                        except:
+                            pass
+                        volume_restored = True
                     return
     
     def _continuous_loop_queue(self):

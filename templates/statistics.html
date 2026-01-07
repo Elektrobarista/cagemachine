@@ -107,15 +107,6 @@
       background: #f8f9fa;
     }
 
-    .game-mode-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      background: #667eea;
-      color: white;
-    }
 
     .empty-state {
       text-align: center;
@@ -143,24 +134,23 @@
   <div class="container">
     <div class="card">
       <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-        <a href="/" class="nav-link">← Zurück zur Hauptseite</a>
-        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;">🎮 Zum laufenden Abend</a>
+        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;">🍺 Zum laufenden Abend</a>
       </div>
       
       <h1>📊 Statistik</h1>
 
       <div class="stats-overview" id="statsOverview">
         <div class="stat-card">
-          <div class="stat-value" id="totalGames">-</div>
-          <div class="stat-label">Abgeschlossene Spiele</div>
+          <div class="stat-value" id="totalStarts">-</div>
+          <div class="stat-label">Audio-Starts</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="totalDuration">-</div>
-          <div class="stat-label">Gesamtspielzeit</div>
+          <div class="stat-label">Gesamte Audio-Zeit</div>
         </div>
       </div>
 
-      <div id="gamesContainer">
+      <div id="audioContainer">
         <div class="loading">Lade Statistik...</div>
       </div>
     </div>
@@ -169,7 +159,7 @@
   <script>
     const API_BASE = "";
     const statsOverview = document.getElementById("statsOverview");
-    const gamesContainer = document.getElementById("gamesContainer");
+    const audioContainer = document.getElementById("audioContainer");
 
     async function apiCall(endpoint, method = "GET", body = null) {
       try {
@@ -217,10 +207,10 @@
     }
 
     async function loadStatistics() {
-      const data = await apiCall("/api/statistics/games", "GET");
+      const data = await apiCall("/api/statistics/audio", "GET");
       
       if (data.error) {
-        gamesContainer.innerHTML = `<div class="empty-state">
+        audioContainer.innerHTML = `<div class="empty-state">
           <div class="empty-state-icon">⚠️</div>
           <div class="empty-state-text">Fehler beim Laden der Statistik</div>
         </div>`;
@@ -228,16 +218,16 @@
       }
 
       // Update Overview
-      document.getElementById("totalGames").textContent = data.total_games || 0;
+      document.getElementById("totalStarts").textContent = data.total_starts || 0;
       document.getElementById("totalDuration").textContent = data.total_duration_formatted || "00:00";
 
-      // Render Games Table
-      if (!data.games || data.games.length === 0) {
-        gamesContainer.innerHTML = `
+      // Render Audio Events
+      if (!data.completed_events || data.completed_events.length === 0) {
+        audioContainer.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon">📊</div>
-            <div class="empty-state-text">Noch keine abgeschlossenen Spiele</div>
-            <p style="margin-top: 12px; color: #999;">Starte ein Spiel und beende es, um es hier zu sehen.</p>
+            <div class="empty-state-icon">🎵</div>
+            <div class="empty-state-text">Noch keine Audio-Events</div>
+            <p style="margin-top: 12px; color: #999;">Starte die Musik, um Events zu tracken.</p>
           </div>
         `;
         return;
@@ -247,24 +237,20 @@
         <table class="games-table">
           <thead>
             <tr>
-              <th>Spielmodus</th>
-              <th>Runden</th>
-              <th>Dauer</th>
+              <th>Gestartet am</th>
               <th>Beendet am</th>
+              <th>Dauer</th>
             </tr>
           </thead>
           <tbody>
       `;
 
-      data.games.forEach(game => {
+      data.completed_events.forEach(event => {
         tableHTML += `
           <tr>
-            <td>
-              <span class="game-mode-badge">${game.game_mode_name || game.game_mode}</span>
-            </td>
-            <td>${game.total_rounds || "-"}</td>
-            <td>${game.duration_formatted || "00:00"}</td>
-            <td>${formatDateTime(game.ended_at)}</td>
+            <td>${formatDateTime(event.started_at)}</td>
+            <td>${formatDateTime(event.ended_at)}</td>
+            <td>${event.duration_formatted || "00:00"}</td>
           </tr>
         `;
       });
@@ -274,7 +260,7 @@
         </table>
       `;
 
-      gamesContainer.innerHTML = tableHTML;
+      audioContainer.innerHTML = tableHTML;
     }
 
     async function checkCurrentEvening() {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rage Cage - Turnier Musik</title>
+  <title>Rage Cage</title>
   <style>
     * {
       box-sizing: border-box;
@@ -80,7 +80,7 @@
       background: #5568d3;
     }
 
-    /* Session Management */
+    /* Rage Cage */
     .session-controls {
       margin-bottom: 24px;
     }
@@ -190,59 +190,19 @@
       background: #dc2626;
     }
 
-    /* Game Mode Selection */
-    .game-mode-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .game-mode-card {
-      border: 2px solid #e0e0e0;
-      border-radius: 12px;
-      padding: 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
-    }
-
-    .game-mode-card:hover {
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-    }
-
-    .game-mode-card.selected {
-      border-color: #667eea;
-      background: #f0f4ff;
-    }
-
-    .game-mode-name {
-      font-weight: 600;
-      font-size: 18px;
-      margin-bottom: 8px;
-      color: #333;
-    }
-
-    .game-mode-desc {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 8px;
-    }
-
-    .game-mode-rounds {
-      font-size: 12px;
-      color: #999;
-      font-weight: 500;
-    }
 
     /* Music Controls */
     .music-controls {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 16px;
       margin-bottom: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .music-controls {
+        grid-template-columns: 1fr;
+      }
     }
 
     .btn-music {
@@ -350,38 +310,15 @@
       margin-bottom: 16px;
     }
 
-    /* Game Controls */
-    .game-controls {
-      margin-top: 20px;
-      display: flex;
-      gap: 12px;
-    }
-
-    .btn-game {
-      flex: 1;
-      padding: 14px 24px;
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .btn-game-start {
-      background: #10b981;
-      color: white;
-    }
-
-    .btn-game-end {
-      background: #ef4444;
-      color: white;
-    }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Session Management Card -->
+    <!-- Rage Cage Card -->
     <div class="card">
       <a href="/statistics" class="nav-link">📊 Statistik anzeigen</a>
       
-      <h1>🎮 Session Management</h1>
+      <h1>🍺 Rage Cage</h1>
       
       <div class="session-controls">
         <button class="btn btn-primary" id="btnCreateEvening">Neuen Abend starten</button>
@@ -394,8 +331,8 @@
           <span class="session-info-value" id="eveningId">-</span>
         </div>
         <div class="session-info-item">
-          <span class="session-info-label">Spiele:</span>
-          <span class="session-info-value" id="gameCount">0</span>
+          <span class="session-info-label">Sessions:</span>
+          <span class="session-info-value" id="sessionCount">0</span>
         </div>
       </div>
 
@@ -407,43 +344,6 @@
         <div class="session-info-item">
           <span class="session-info-label">Spieler:</span>
           <span class="session-info-value" id="playerCount">0</span>
-        </div>
-        <div class="session-info-item">
-          <span class="session-info-label">Spielmodus:</span>
-          <span class="session-info-value" id="gameModeDisplay">-</span>
-        </div>
-        <div class="session-info-item">
-          <span class="session-info-label">Runden:</span>
-          <span class="session-info-value" id="roundsDisplay">-</span>
-        </div>
-      </div>
-
-      <div id="currentGameInfo" class="session-info" style="display: none;">
-        <div class="session-info-item">
-          <span class="session-info-label">Aktives Spiel:</span>
-          <span class="session-info-value" id="currentGameMode">-</span>
-        </div>
-        <div class="session-info-item">
-          <span class="session-info-label">Status:</span>
-          <span class="session-info-value" id="currentGameStatus">-</span>
-        </div>
-      </div>
-
-      <div id="roundInfo" class="session-info" style="display: none;">
-        <div class="session-info-item">
-          <span class="session-info-label">Aktuelle Runde:</span>
-          <span class="session-info-value" id="currentRoundNumber">-</span>
-        </div>
-        <div class="session-info-item">
-          <span class="session-info-label">Timer:</span>
-          <span class="session-info-value" id="timerDisplay">-</span>
-        </div>
-      </div>
-
-      <div id="roundControls" style="display: none;">
-        <div class="game-controls">
-          <button class="btn btn-game btn-game-start" id="btnStartRound">Runde starten</button>
-          <button class="btn btn-game btn-game-end" id="btnEndRound" disabled>Runde beenden</button>
         </div>
       </div>
 
@@ -468,17 +368,6 @@
         </div>
       </div>
 
-      <div id="gameModeSection" style="display: none;">
-        <div class="section-title">Spielmodus wählen</div>
-        <div class="game-mode-grid" id="gameModeGrid"></div>
-      </div>
-
-      <div id="gameControls" style="display: none;">
-        <div class="game-controls">
-          <button class="btn btn-game btn-game-start" id="btnStartGame">Spiel starten</button>
-          <button class="btn btn-game btn-game-end" id="btnEndGame" disabled>Spiel beenden</button>
-        </div>
-      </div>
     </div>
 
     <!-- Music Control Card -->
@@ -510,20 +399,10 @@
     const btnCreateSession = document.getElementById("btnCreateSession");
     const eveningInfo = document.getElementById("eveningInfo");
     const sessionInfo = document.getElementById("sessionInfo");
-    const currentGameInfo = document.getElementById("currentGameInfo");
     const playerSection = document.getElementById("playerSection");
-    const gameModeSection = document.getElementById("gameModeSection");
-    const gameControls = document.getElementById("gameControls");
     const playerNameInput = document.getElementById("playerNameInput");
     const btnAddPlayer = document.getElementById("btnAddPlayer");
     const playerList = document.getElementById("playerList");
-    const gameModeGrid = document.getElementById("gameModeGrid");
-    const btnStartGame = document.getElementById("btnStartGame");
-    const btnEndGame = document.getElementById("btnEndGame");
-    const roundInfo = document.getElementById("roundInfo");
-    const roundControls = document.getElementById("roundControls");
-    const btnStartRound = document.getElementById("btnStartRound");
-    const btnEndRound = document.getElementById("btnEndRound");
     
     const btnStart = document.getElementById("btnStart");
     const btnPause = document.getElementById("btnPause");
@@ -536,13 +415,9 @@
     let currentEvening = null;
     let currentSessionId = null;
     let currentSession = null;
-    let currentGame = null;
-    let currentRound = null;
-    let gameModes = {};
     let currentStatus = "stopped";
     let statusPollInterval = null;
     let positionPollInterval = null;
-    let timerPollInterval = null;
     let currentPosition = 0;
     let totalDuration = 0;
 
@@ -598,11 +473,29 @@
         if (data.evening) {
           currentEveningId = data.evening.id;
           currentEvening = data.evening;
-          updateEveningUI();
-          await createSession();
+          try {
+            updateEveningUI();
+          } catch (uiError) {
+            console.error("Fehler beim Aktualisieren der Evening-UI:", uiError);
+            // UI-Fehler sind nicht kritisch, weiter mit Session-Erstellung
+          }
+          
+          // Bug Fix: Handle exceptions from createSession() to prevent inconsistent state
+          try {
+            await createSession();
+          } catch (sessionError) {
+            console.error("Fehler beim Erstellen der Session:", sessionError);
+            alert("Abend wurde erstellt, aber die Session konnte nicht erstellt werden. Bitte erstelle die Session manuell.");
+            // Evening bleibt bestehen, da es bereits auf dem Server erstellt wurde
+            // Benutzer kann Session manuell erstellen
+          }
         } else if (data.error) {
           alert(data.error);
         }
+      } catch (error) {
+        // Fange alle anderen unerwarteten Fehler ab
+        console.error("Unerwarteter Fehler beim Erstellen des Abends:", error);
+        alert("Ein Fehler ist beim Erstellen des Abends aufgetreten: " + (error.message || "Unbekannter Fehler"));
       } finally {
         // Reaktiviere Button nach Abschluss (oder Fehler)
         btnCreateEvening.disabled = false;
@@ -615,6 +508,28 @@
         currentEveningId = data.evening.id;
         currentEvening = data.evening;
         updateEveningUI();
+        
+        // Lade Sessions des Abends, falls vorhanden
+        if (data.evening.sessions && data.evening.sessions.length > 0) {
+          // Lade die aktuelle Session oder die erste Session
+          const sessionId = data.evening.current_session_id || data.evening.sessions[0];
+          if (sessionId && sessionId !== currentSessionId) {
+            const sessionData = await apiCall(`/api/session/${sessionId}`, "GET");
+            if (sessionData.session) {
+              currentSessionId = sessionData.session.id;
+              currentSession = sessionData.session;
+              updateSessionUI();
+            }
+          }
+        }
+      } else {
+        // Reset evening state when no evening exists
+        currentEveningId = null;
+        currentEvening = null;
+        currentSessionId = null;
+        currentSession = null;
+        updateEveningUI();
+        updateSessionUI();
       }
     }
 
@@ -625,15 +540,31 @@
         btnCreateSession.disabled = true;
       }
       try {
-        const data = await apiCall("/api/session/create", "POST");
+        const eveningId = currentEveningId || null;
+        const data = await apiCall("/api/session/create", "POST", { evening_id: eveningId });
         if (data.session_id) {
           currentSessionId = data.session_id;
           currentSession = data.session;
-          await loadGameModes(); // Warte auf Game-Modes, damit UI vollständig ist
-          updateSessionUI();
+          try {
+            updateSessionUI();
+          } catch (uiError) {
+            console.error("Fehler beim Aktualisieren der Session-UI:", uiError);
+            // UI-Fehler sind nicht kritisch, weiter mit loadEvening()
+          }
+          // Lade Abend neu, um Session-Liste zu aktualisieren
+          try {
+            await loadEvening();
+          } catch (loadError) {
+            console.error("Fehler beim Laden des Abends:", loadError);
+            // Fehler beim Laden ist nicht kritisch, Session wurde bereits erstellt
+          }
         } else if (data.error) {
           alert(data.error);
         }
+      } catch (error) {
+        // Fange alle anderen unerwarteten Fehler ab und werfe sie weiter
+        console.error("Unerwarteter Fehler beim Erstellen der Session:", error);
+        throw error; // Werfe weiter, damit createEvening() den Fehler behandeln kann
       } finally {
         // Reaktiviere Button nach Abschluss (oder Fehler)
         if (btnCreateSession) {
@@ -666,188 +597,6 @@
       }
     };
 
-    async function setGameMode(gameMode) {
-      if (!currentSessionId) return;
-      const data = await apiCall(`/api/session/${currentSessionId}/game-mode`, "POST", { game_mode: gameMode });
-      if (data.session) {
-        currentSession = data.session;
-        updateSessionUI();
-        updateGameModeSelection();
-      } else if (data.error) {
-        alert(data.error);
-      }
-    }
-
-    async function loadGameModes() {
-      const data = await apiCall("/api/game-modes", "GET");
-      if (data.game_modes) {
-        gameModes = data.game_modes;
-        renderGameModes();
-      }
-    }
-
-    function renderGameModes() {
-      gameModeGrid.innerHTML = "";
-      Object.entries(gameModes).forEach(([key, mode]) => {
-        const card = document.createElement("div");
-        card.className = "game-mode-card";
-        if (currentSession && currentSession.game_mode === key) {
-          card.classList.add("selected");
-        }
-        card.innerHTML = `
-          <div class="game-mode-name">${mode.name}</div>
-          <div class="game-mode-desc">${mode.description}</div>
-          <div class="game-mode-rounds">${mode.rounds ? `${mode.rounds} Runden` : 'Dynamisch'}</div>
-        `;
-        card.addEventListener("click", () => setGameMode(key));
-        gameModeGrid.appendChild(card);
-      });
-    }
-
-    function updateGameModeSelection() {
-      document.querySelectorAll(".game-mode-card").forEach(card => {
-        card.classList.remove("selected");
-      });
-      if (currentSession && currentSession.game_mode) {
-        const cards = document.querySelectorAll(".game-mode-card");
-        const index = Object.keys(gameModes).indexOf(currentSession.game_mode);
-        if (cards[index]) {
-          cards[index].classList.add("selected");
-        }
-      }
-    }
-
-    async function startGame() {
-      if (!currentSession || !currentSession.game_mode) {
-        alert("Bitte wähle zuerst einen Spielmodus aus");
-        return;
-      }
-
-      if (!currentSessionId) {
-        alert("Fehler: Keine Session-ID vorhanden. Bitte erstelle zuerst eine Session.");
-        return;
-      }
-
-      // Deaktiviere Button sofort, um Doppelklicks zu verhindern
-      btnStartGame.disabled = true;
-      try {
-        const playerCount = currentSession.players ? currentSession.players.length : 0;
-        const data = await apiCall("/api/game/start", "POST", { 
-          game_mode: currentSession.game_mode,
-          player_count: playerCount,
-          session_id: currentSessionId  // Sende Session-ID mit, damit sie im Spiel gespeichert wird
-        });
-
-        if (data.game) {
-          currentGame = data.game;
-          // Prüfe, ob session_id korrekt im Spiel gespeichert wurde
-          if (data.game.session_id !== currentSessionId) {
-            console.warn("Warnung: session_id im Spiel stimmt nicht überein:", data.game.session_id, "vs", currentSessionId);
-          }
-          updateGameUI(); // This will disable btnStartGame when game is active
-          btnEndGame.disabled = false;
-          // Starte automatisch erste Runde für RND-Modus
-          if (currentGame.game_mode === "RND") {
-            try {
-              await startRound();
-            } catch (error) {
-              console.error("Fehler beim automatischen Start der ersten Runde:", error);
-              // Spiel wurde trotzdem gestartet, nur die Runde konnte nicht gestartet werden
-            }
-          }
-        } else if (data.error) {
-          alert(data.error);
-          // Reaktiviere Button bei Fehler, da kein Spiel gestartet wurde
-          btnStartGame.disabled = false;
-        }
-      } catch (error) {
-        // Reaktiviere Button bei Exception
-        btnStartGame.disabled = false;
-        throw error;
-      }
-    }
-
-    async function endGame() {
-      if (!currentGame) return;
-
-      const data = await apiCall(`/api/game/${currentGame.id}/end`, "POST");
-      if (data.game) {
-        currentGame = null;
-        currentRound = null;  // WICHTIG: Runde auch zurücksetzen
-        updateGameUI();
-        btnEndGame.disabled = true;
-        stopTimerPolling();  // Timer-Polling stoppen
-        // Lade Abend neu um Spielanzahl zu aktualisieren
-        loadEvening();
-      } else if (data.error) {
-        alert(data.error);
-      }
-    }
-
-    async function loadCurrentGame() {
-      const data = await apiCall("/api/game/current", "GET");
-      if (data.game) {
-        currentGame = data.game;
-        updateGameUI(); // This will handle button states correctly
-        if (currentGame.status === "active") {
-          btnEndGame.disabled = false;
-        }
-      } else {
-        currentGame = null;
-        updateGameUI(); // This will enable btnStartGame when no game is active
-        btnEndGame.disabled = true;
-      }
-    }
-
-    async function restoreSessionFromGame() {
-      // Versuche zuerst, die Session aus dem Spiel wiederherzustellen
-      if (currentGame && currentGame.session_id) {
-        console.log("Versuche Session wiederherzustellen:", currentGame.session_id);
-        // Lade die ursprüngliche Session
-        const sessionData = await apiCall(`/api/session/${currentGame.session_id}`, "GET");
-        if (sessionData.session) {
-          console.log("Session erfolgreich wiederhergestellt:", sessionData.session);
-          currentSessionId = sessionData.session.id;
-          currentSession = sessionData.session;
-          
-          // Lade Game-Modes zuerst, damit sie verfügbar sind
-          await loadGameModes();
-          
-          // Aktualisiere UI - Spielmodus sollte bereits in der Session sein
-          updateSessionUI();
-          updateGameModeSelection();
-          return;
-        } else {
-          console.warn("Session nicht gefunden:", currentGame.session_id, sessionData);
-        }
-        // Wenn Session nicht gefunden wurde (z.B. gelöscht), falle zurück auf neue Session
-        // aber behalte den Spielmodus aus dem Spiel
-      } else {
-        console.log("Keine session_id im Spiel gefunden:", currentGame);
-      }
-      
-      // Fallback: Erstelle eine neue Session mit dem Spielmodus des aktiven Spiels
-      // (nur wenn keine Session-ID im Spiel gespeichert ist oder Session nicht gefunden wurde)
-      console.log("Erstelle neue Session als Fallback");
-      const sessionData = await apiCall("/api/session/create", "POST");
-      if (sessionData.session_id) {
-        currentSessionId = sessionData.session_id;
-        currentSession = sessionData.session;
-        
-        // Lade Game-Modes zuerst, damit sie verfügbar sind
-        await loadGameModes();
-        
-        // Setze den Spielmodus aus dem aktiven Spiel
-        if (currentGame && currentGame.game_mode) {
-          await setGameMode(currentGame.game_mode);
-        }
-        
-        // Aktualisiere UI nach dem Setzen des Spielmodus
-        updateSessionUI();
-      } else if (sessionData.error) {
-        alert(`Fehler beim Wiederherstellen der Session: ${sessionData.error}`);
-      }
-    }
 
     function updateEveningUI() {
       if (!currentEvening) {
@@ -857,36 +606,21 @@
 
       eveningInfo.style.display = "block";
       document.getElementById("eveningId").textContent = currentEvening.id.substring(0, 8) + "...";
-      document.getElementById("gameCount").textContent = currentEvening.games ? currentEvening.games.length : 0;
+      document.getElementById("sessionCount").textContent = currentEvening.sessions ? currentEvening.sessions.length : 0;
     }
 
     function updateSessionUI() {
       if (!currentSession) {
         sessionInfo.style.display = "none";
         playerSection.style.display = "none";
-        gameModeSection.style.display = "none";
-        gameControls.style.display = "none";
         return;
       }
 
       sessionInfo.style.display = "block";
       document.getElementById("sessionId").textContent = currentSession.id.substring(0, 8) + "...";
       document.getElementById("playerCount").textContent = currentSession.players ? currentSession.players.length : 0;
-      document.getElementById("gameModeDisplay").textContent = 
-        currentSession.game_mode ? gameModes[currentSession.game_mode]?.name || currentSession.game_mode : "-";
-      
-      const mode = currentSession.game_mode ? gameModes[currentSession.game_mode] : null;
-      if (mode && mode.rounds) {
-        document.getElementById("roundsDisplay").textContent = mode.rounds;
-      } else if (currentSession.game_mode === "SOLI") {
-        document.getElementById("roundsDisplay").textContent = currentSession.players ? currentSession.players.length : "-";
-      } else {
-        document.getElementById("roundsDisplay").textContent = "-";
-      }
 
       playerSection.style.display = "block";
-      gameModeSection.style.display = "block";
-      gameControls.style.display = "block";
 
       // Player List
       if (!currentSession.players || currentSession.players.length === 0) {
@@ -921,215 +655,6 @@
       }
     }
 
-    function updateGameUI() {
-      if (!currentGame) {
-        currentGameInfo.style.display = "none";
-        roundInfo.style.display = "none";
-        roundControls.style.display = "none";
-        btnStartGame.disabled = false;
-        stopTimerPolling();
-        return;
-      }
-
-      currentGameInfo.style.display = "block";
-      document.getElementById("currentGameMode").textContent = 
-        gameModes[currentGame.game_mode]?.name || currentGame.game_mode;
-      document.getElementById("currentGameStatus").textContent = 
-        currentGame.status === "active" ? "Aktiv" : "Abgeschlossen";
-      
-      btnStartGame.disabled = currentGame.status === "active";
-      
-      // Lade aktuelle Runde, wenn Spiel aktiv ist
-      if (currentGame.status === "active") {
-        loadCurrentRound();
-      } else {
-        roundInfo.style.display = "none";
-        roundControls.style.display = "none";
-        stopTimerPolling();
-      }
-    }
-
-    async function startRound() {
-      if (!currentGame) return;
-      
-      // Prüfe ob bereits eine Runde läuft
-      if (currentRound && currentRound.round_number) {
-        console.warn("Eine Runde läuft bereits");
-        return;
-      }
-      
-      btnStartRound.disabled = true;
-      try {
-        const data = await apiCall(`/api/game/${currentGame.id}/round/start`, "POST");
-        if (data.round) {
-          currentRound = data.round;
-          updateRoundUI();
-          btnEndRound.disabled = false;
-          // KEIN Timer-Polling während Runde - Timer startet erst nach Rundenende
-        } else if (data.error) {
-          alert(data.error);
-          btnStartRound.disabled = false;
-        }
-      } catch (error) {
-        console.error("Fehler beim Starten der Runde:", error);
-        btnStartRound.disabled = false;
-        throw error;
-      }
-    }
-
-    async function endRound() {
-      if (!currentGame) return;
-      
-      btnEndRound.disabled = true;
-      try {
-        const data = await apiCall(`/api/game/${currentGame.id}/round/end`, "POST");
-        if (data.round) {
-          // Runde beendet - Timer sollte jetzt starten (falls RND-Modus)
-          currentRound = null;
-          // Lade Timer-Status neu (Timer startet nach Rundenende)
-          await loadCurrentRound();
-          btnStartRound.disabled = false;
-        } else if (data.error) {
-          alert(data.error);
-          btnEndRound.disabled = false;
-        }
-      } catch (error) {
-        btnEndRound.disabled = false;
-        throw error;
-      }
-    }
-
-    async function loadCurrentRound() {
-      if (!currentGame) return;
-      
-      try {
-        const data = await apiCall(`/api/game/${currentGame.id}/round/current`, "GET");
-        if (data.round) {
-          currentRound = data.round;
-        } else {
-          currentRound = null;
-        }
-        
-        // Prüfe Timer-Status (auch wenn keine Runde aktiv ist - Timer läuft zwischen Runden)
-        const timerData = await apiCall(`/api/game/${currentGame.id}/timer/remaining`, "GET");
-        if (timerData.remaining !== null && timerData.remaining !== undefined && timerData.remaining > 0) {
-          // Timer läuft zwischen Runden
-          if (!currentRound) {
-            // Erstelle temporäres Round-Objekt für Timer-Anzeige
-            currentRound = { timer_remaining: timerData.remaining };
-          } else {
-            currentRound.timer_remaining = timerData.remaining;
-          }
-          startTimerPolling();
-        } else {
-          // Kein Timer aktiv
-          if (currentRound) {
-            currentRound.timer_remaining = null;
-          }
-          stopTimerPolling();
-        }
-        
-        updateRoundUI();
-      } catch (error) {
-        console.error("Fehler beim Laden der aktuellen Runde:", error);
-        currentRound = null;
-        updateRoundUI();
-      }
-    }
-
-    function updateRoundUI() {
-      // Wenn kein Spiel aktiv ist, verstecke alles
-      if (!currentGame) {
-        roundInfo.style.display = "none";
-        roundControls.style.display = "none";
-        btnStartRound.disabled = false;
-        btnEndRound.disabled = true;
-        return;
-      }
-
-      // Wenn Spiel aktiv ist, zeige immer die Rundenansicht
-      roundInfo.style.display = "block";
-      roundControls.style.display = "block";
-
-      // Prüfe ob eine Runde aktiv ist (hat round_number)
-      const hasActiveRound = currentRound && currentRound.round_number;
-      
-      if (!hasActiveRound) {
-        // Keine aktive Runde - prüfe ob Timer zwischen Runden läuft
-        if (currentRound && currentRound.timer_remaining !== null && currentRound.timer_remaining !== undefined && currentRound.timer_remaining > 0) {
-          // Timer läuft zwischen Runden
-          document.getElementById("currentRoundNumber").textContent = "-";
-          document.getElementById("timerDisplay").textContent = formatTime(currentRound.timer_remaining);
-          btnStartRound.disabled = true;  // Warte bis Timer abgelaufen ist
-          btnEndRound.disabled = true;
-        } else {
-          // Keine aktive Runde und kein Timer
-          document.getElementById("currentRoundNumber").textContent = "-";
-          document.getElementById("timerDisplay").textContent = "Keine aktive Runde";
-          btnStartRound.disabled = false;
-          btnEndRound.disabled = true;
-        }
-        return;
-      }
-
-      // Aktive Runde vorhanden - zeige Runden-Info
-      document.getElementById("currentRoundNumber").textContent = currentRound.round_number;
-      
-      // Während einer Runde läuft KEIN Timer - Timer startet erst nach Rundenende
-      document.getElementById("timerDisplay").textContent = "Runde läuft";
-      
-      // Button-Status aktualisieren
-      btnStartRound.disabled = true;  // Runde läuft bereits
-      btnEndRound.disabled = false;   // Kann beendet werden
-    }
-
-    function startTimerPolling() {
-      if (timerPollInterval) return;
-      timerPollInterval = setInterval(async () => {
-        if (!currentGame) {
-          stopTimerPolling();
-          return;
-        }
-        
-        const data = await apiCall(`/api/game/${currentGame.id}/timer/remaining`, "GET");
-        if (data.remaining !== null && data.remaining !== undefined) {
-          // Timer läuft zwischen Runden
-          if (!currentRound) {
-            currentRound = { timer_remaining: data.remaining };
-          } else {
-            currentRound.timer_remaining = data.remaining;
-          }
-          updateRoundUI();
-          
-          if (data.remaining <= 0) {
-            // Timer abgelaufen - Musik sollte automatisch gestartet sein
-            stopTimerPolling();
-            if (currentRound) {
-              currentRound.timer_remaining = 0;
-            }
-            // Lade Runden-Status neu (Timer ist abgelaufen, Runde kann gestartet werden)
-            loadCurrentRound();
-          }
-        } else {
-          // Kein Timer aktiv
-          if (currentRound && !currentRound.round_number) {
-            // Nur Timer-Objekt ohne Runde - entferne es
-            currentRound = null;
-          } else if (currentRound) {
-            currentRound.timer_remaining = null;
-          }
-          stopTimerPolling();
-          updateRoundUI();
-        }
-      }, 500); // Poll alle 500ms
-    }
-
-    function stopTimerPolling() {
-      if (timerPollInterval) {
-        clearInterval(timerPollInterval);
-        timerPollInterval = null;
-      }
-    }
 
     // Musik-Steuerung
     function formatTime(seconds) {
@@ -1196,16 +721,15 @@
 
     // Event Listeners
     btnCreateEvening.addEventListener("click", createEvening);
+    if (btnCreateSession) {
+      btnCreateSession.addEventListener("click", createSession);
+    }
     btnAddPlayer.addEventListener("click", addPlayer);
     playerNameInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         addPlayer();
       }
     });
-    btnStartGame.addEventListener("click", startGame);
-    btnEndGame.addEventListener("click", endGame);
-    btnStartRound.addEventListener("click", startRound);
-    btnEndRound.addEventListener("click", endRound);
 
     btnStart.addEventListener("click", async () => {
       if (currentStatus === "paused") {
@@ -1279,35 +803,20 @@
     updateButtonStates();
     updatePosition();
     
-    // Lade Abend und Spiel, dann stelle Session wieder her falls nötig
+    // Initialisierung
     async function initializePage() {
-      await Promise.all([loadEvening(), loadCurrentGame()]);
+      await loadEvening();
       
-      // Wenn ein Abend existiert
-      if (currentEvening) {
-        // Wenn ein aktives Spiel existiert, versuche IMMER die Session wiederherzustellen
-        if (currentGame && currentGame.status === "active") {
-          await restoreSessionFromGame();
-          // Bug Fix 1: Aktualisiere Game-UI nach Session-Wiederherstellung
-          updateGameUI();
-        } else if (!currentSessionId) {
-          // Wenn kein aktives Spiel, versuche das letzte Spiel zu laden
-          // um die Session wiederherzustellen (auch wenn das Spiel beendet ist)
-          const latestGameData = await apiCall("/api/game/latest", "GET");
-          if (latestGameData.game && latestGameData.game.session_id) {
-            // Verwende das letzte Spiel für die Session-Wiederherstellung
-            const previousGame = currentGame;
-            currentGame = latestGameData.game;
-            await restoreSessionFromGame();
-            // Bug Fix 2: Aktualisiere Game-UI immer, unabhängig vom Status
-            if (latestGameData.game.status === "completed") {
-              currentGame = previousGame; // Behalte den ursprünglichen Wert (null)
-            }
-            // WICHTIG: Aktualisiere UI nach Session-Wiederherstellung (für beide Status)
-            updateGameUI();
-          } else {
-            // Wenn kein Spiel mit Session gefunden, erstelle eine neue Session
-            await createSession();
+      // Wenn ein Abend existiert, lade Sessions
+      if (currentEvening && currentEvening.sessions && currentEvening.sessions.length > 0) {
+        // Lade die erste Session (oder aktuelle Session, falls vorhanden)
+        const sessionId = currentEvening.current_session_id || currentEvening.sessions[0];
+        if (sessionId) {
+          const sessionData = await apiCall(`/api/session/${sessionId}`, "GET");
+          if (sessionData.session) {
+            currentSessionId = sessionData.session.id;
+            currentSession = sessionData.session;
+            updateSessionUI();
           }
         }
       }

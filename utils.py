@@ -1,6 +1,5 @@
 """Helper-Funktionen für die Anwendung"""
 from datetime import datetime
-from config import GAME_MODES
 
 
 def format_duration(seconds):
@@ -45,17 +44,4 @@ def calculate_duration(started_at, ended_at):
     return delta.total_seconds()
 
 
-def get_game_mode_name(mode_id):
-    """
-    Gibt den Anzeigenamen für einen Spielmodus zurück
-    
-    Args:
-        mode_id: Spielmodus-ID (z.B. "RND", "SOLI", "THUNDERSTORM")
-    
-    Returns:
-        str: Anzeigename des Spielmodus oder die ID selbst falls nicht gefunden
-    """
-    if mode_id in GAME_MODES:
-        return GAME_MODES[mode_id]["name"]
-    return mode_id
 

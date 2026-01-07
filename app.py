@@ -1,13 +1,8 @@
 from flask import Flask, render_template, jsonify, request
-from dotenv import load_dotenv
 from audio_controller import AudioController
-from config import get_audio_paths, GAME_MODES
+from config import get_audio_paths
 from game_manager import GameManager
-from utils import format_duration, get_game_mode_name
-from timer_service import TimerService
-
-# Lade Umgebungsvariablen aus .env Datei
-load_dotenv()
+from utils import format_duration
 
 app = Flask(__name__)
 
@@ -18,9 +13,8 @@ audio = AudioController(intro_path=intro_path, loop_path=loop_path)
 # GameManager-Instanz erstellen
 game_manager = GameManager()
 
-# TimerService-Instanz erstellen
-timer_service = TimerService(audio)
-timer_service.start()  # Starte Timer-Service
+# Audio-Events für Statistiken tracken
+audio_events = []  # Liste von {"started_at": datetime, "ended_at": datetime, "duration": float}
 
 
 @app.route("/")
@@ -40,8 +34,11 @@ def statistics():
 def start():
     """Startet Audio (Intro → Loop)"""
     try:
+        from datetime import datetime
         audio.start()
         status = audio.get_status()
+        # Track Audio-Start für Statistiken
+        audio_events.append({"started_at": datetime.now(), "ended_at": None, "duration": None})
         return jsonify(status), 200
     except FileNotFoundError as e:
         return jsonify({"status": "error", "message": str(e)}), 404
@@ -53,6 +50,7 @@ def start():
 def start_at():
     """Startet Audio ab einer bestimmten Position (in Sekunden)"""
     try:
+        from datetime import datetime
         data = request.get_json() or {}
         position = data.get("position", 0)
         
@@ -64,6 +62,8 @@ def start_at():
         
         audio.start_at_position(position)
         status = audio.get_status()
+        # Track Audio-Start für Statistiken
+        audio_events.append({"started_at": datetime.now(), "ended_at": None, "duration": None})
         return jsonify(status), 200
     except FileNotFoundError as e:
         return jsonify({"status": "error", "message": str(e)}), 404
@@ -97,8 +97,17 @@ def resume():
 def stop():
     """Stoppt Audio mit Fade-Out"""
     try:
+        from datetime import datetime
+        from utils import calculate_duration
         audio.stop()
         status = audio.get_status()
+        # Track Audio-Ende für Statistiken
+        if audio_events:
+            last_event = audio_events[-1]
+            if last_event["ended_at"] is None:
+                last_event["ended_at"] = datetime.now()
+                if last_event["started_at"]:
+                    last_event["duration"] = calculate_duration(last_event["started_at"], last_event["ended_at"])
         return jsonify(status), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
@@ -168,108 +177,12 @@ def get_evening(evening_id):
         return jsonify({"error": str(e)}), 500
 
 
-# Game-API-Endpunkte
-@app.route("/api/game/start", methods=["POST"])
-def start_game():
-    """Startet ein neues Spiel im aktuellen Abend"""
+@app.route("/api/evening/<evening_id>/sessions", methods=["GET"])
+def get_sessions_by_evening(evening_id):
+    """Gibt alle Sessions eines Abends zurück"""
     try:
-        data = request.get_json() or {}
-        game_mode = data.get("game_mode", "").upper()
-        player_count = data.get("player_count", 0)
-        session_id = data.get("session_id")
-        
-        if not game_mode:
-            return jsonify({"error": "Spielmodus muss angegeben werden"}), 400
-        
-        if game_mode not in GAME_MODES:
-            return jsonify({"error": "Ungültiger Spielmodus"}), 400
-        
-        evening = game_manager.get_current_evening()
-        if not evening:
-            return jsonify({"error": "Kein aktiver Abend. Bitte erst einen Abend erstellen."}), 400
-        
-        game = game_manager.start_game(evening.id, game_mode, player_count, session_id)
-        return jsonify({"game": game.to_dict()}), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/<game_id>/end", methods=["POST"])
-def end_game(game_id):
-    """Beendet ein Spiel manuell"""
-    try:
-        # Bricht Timer ab, falls aktiv (wichtig: vor dem Beenden des Spiels)
-        timer_service.cancel_timer(game_id)
-        
-        # Beende aktive Runde, falls vorhanden
-        try:
-            current_round = game_manager.get_current_round(game_id)
-            if current_round:
-                game_manager.end_round(game_id)
-        except ValueError:
-            # Keine aktive Runde vorhanden, das ist ok
-            pass
-        
-        game = game_manager.end_game(game_id)
-        return jsonify({"game": game.to_dict()}), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/<game_id>/complete", methods=["POST"])
-def complete_game(game_id):
-    """Markiert ein Spiel als abgeschlossen (alle Runden gespielt)"""
-    try:
-        game = game_manager.complete_game(game_id)
-        return jsonify({"game": game.to_dict()}), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/current", methods=["GET"])
-def get_current_game():
-    """Gibt das aktuelle aktive Spiel zurück"""
-    try:
-        evening = game_manager.get_current_evening()
-        if not evening:
-            return jsonify({"game": None}), 200
-        
-        game = game_manager.get_current_game(evening.id)
-        if game:
-            return jsonify({"game": game.to_dict()}), 200
-        return jsonify({"game": None}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/latest", methods=["GET"])
-def get_latest_game():
-    """Gibt das letzte Spiel eines Abends zurück (auch wenn beendet)"""
-    try:
-        evening = game_manager.get_current_evening()
-        if not evening:
-            return jsonify({"game": None}), 200
-        
-        game = game_manager.get_latest_game(evening.id)
-        if game:
-            return jsonify({"game": game.to_dict()}), 200
-        return jsonify({"game": None}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/evening/<evening_id>/games", methods=["GET"])
-def get_games_by_evening(evening_id):
-    """Gibt alle Spiele eines Abends zurück"""
-    try:
-        games = game_manager.get_games_by_evening(evening_id)
-        return jsonify({"games": [g.to_dict() for g in games]}), 200
+        sessions = game_manager.get_sessions_by_evening(evening_id)
+        return jsonify({"sessions": [s.to_dict() for s in sessions]}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -279,7 +192,9 @@ def get_games_by_evening(evening_id):
 def create_session():
     """Erstellt eine neue Session"""
     try:
-        session = game_manager.create_session()
+        data = request.get_json() or {}
+        evening_id = data.get("evening_id")
+        session = game_manager.create_session(evening_id=evening_id)
         return jsonify({"session_id": session.id, "session": session.to_dict()}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -334,137 +249,34 @@ def remove_player(session_id, player_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/session/<session_id>/game-mode", methods=["POST"])
-def set_session_game_mode(session_id):
-    """Setzt den Spielmodus für eine Session"""
-    try:
-        data = request.get_json() or {}
-        game_mode = data.get("game_mode", "").upper()
-        
-        if not game_mode:
-            return jsonify({"error": "Spielmodus muss angegeben werden"}), 400
-        
-        session = game_manager.set_session_game_mode(session_id, game_mode)
-        return jsonify({"session": session.to_dict(), "game_mode_info": GAME_MODES[game_mode]}), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# Game-Modes-API
-@app.route("/api/game-modes", methods=["GET"])
-def get_game_modes():
-    """Gibt alle verfügbaren Spielmodi zurück"""
-    return jsonify({"game_modes": GAME_MODES}), 200
-
-
 # Statistik-API
-@app.route("/api/statistics/games", methods=["GET"])
-def get_statistics_games():
-    """Gibt alle abgeschlossenen Spiele für die Statistik zurück"""
+@app.route("/api/statistics/audio", methods=["GET"])
+def get_statistics_audio():
+    """Gibt Audio-Statistiken zurück"""
     try:
-        games = game_manager.get_completed_games()
+        from utils import calculate_duration
         
-        # Formatiere Spiele für Frontend
-        formatted_games = []
+        # Berechne Statistiken aus audio_events
+        total_starts = len(audio_events)
         total_duration = 0.0
+        completed_events = []
         
-        for game in games:
-            formatted_games.append({
-                "id": game.id,
-                "game_mode": game.game_mode,
-                "game_mode_name": get_game_mode_name(game.game_mode),
-                "duration": game.duration,
-                "duration_formatted": format_duration(game.duration) if game.duration else "00:00",
-                "ended_at": game.ended_at.isoformat() if game.ended_at else None,
-                "total_rounds": game.total_rounds
-            })
-            if game.duration:
-                total_duration += game.duration
+        for event in audio_events:
+            if event["duration"] is not None:
+                total_duration += event["duration"]
+                completed_events.append({
+                    "started_at": event["started_at"].isoformat() if event["started_at"] else None,
+                    "ended_at": event["ended_at"].isoformat() if event["ended_at"] else None,
+                    "duration": event["duration"],
+                    "duration_formatted": format_duration(event["duration"])
+                })
         
         return jsonify({
-            "games": formatted_games,
-            "total_games": len(formatted_games),
+            "total_starts": total_starts,
             "total_duration": total_duration,
-            "total_duration_formatted": format_duration(total_duration)
+            "total_duration_formatted": format_duration(total_duration),
+            "completed_events": completed_events
         }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# Round-API-Endpunkte
-@app.route("/api/game/<game_id>/round/start", methods=["POST"])
-def start_round(game_id):
-    """Startet eine neue Runde"""
-    try:
-        round_obj = game_manager.start_round(game_id)
-        
-        # KEIN Timer beim Rundenstart - Timer wird erst nach Rundenende gesetzt
-        # (Erste Runde hat keinen Timer, Timer startet erst nach Ende der ersten Runde)
-        
-        return jsonify({"round": round_obj.to_dict()}), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/<game_id>/round/end", methods=["POST"])
-def end_round(game_id):
-    """Beendet die aktuelle Runde"""
-    try:
-        # Bricht Timer ab, falls aktiv (wichtig: vor dem Beenden der Runde)
-        timer_service.cancel_timer(game_id)
-        
-        # Beende Runde (berechnet Timer-Dauer für nächste Runde, falls RND-Modus)
-        round_obj = game_manager.end_round(game_id)
-        
-        # Setze Timer, falls vorhanden (nur im RND-Modus, nach Rundenende)
-        if round_obj.timer_duration:
-            timer_service.set_timer(game_id, round_obj.timer_duration)
-        
-        return jsonify({"round": round_obj.to_dict()}), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/<game_id>/round/current", methods=["GET"])
-def get_current_round(game_id):
-    """Gibt die aktuelle Runde zurück"""
-    try:
-        round_obj = game_manager.get_current_round(game_id)
-        if round_obj:
-            # Füge verbleibende Timer-Zeit hinzu
-            remaining_time = timer_service.get_remaining_time(game_id)
-            round_dict = round_obj.to_dict()
-            round_dict["timer_remaining"] = remaining_time
-            return jsonify({"round": round_dict}), 200
-        return jsonify({"round": None}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/<game_id>/rounds", methods=["GET"])
-def get_rounds(game_id):
-    """Gibt alle Runden eines Spiels zurück"""
-    try:
-        rounds = game_manager.get_rounds_by_game(game_id)
-        return jsonify({"rounds": [r.to_dict() for r in rounds]}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/game/<game_id>/timer/remaining", methods=["GET"])
-def get_timer_remaining(game_id):
-    """Gibt die verbleibende Timer-Zeit zurück"""
-    try:
-        remaining = timer_service.get_remaining_time(game_id)
-        if remaining is not None:
-            return jsonify({"remaining": remaining}), 200
-        return jsonify({"remaining": None}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
