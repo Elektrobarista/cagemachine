@@ -1,21 +1,14 @@
-# Verwende Python 3.10 als Basis-Image
-FROM python:3.10-slim
+# Verwende Ubuntu mit Python
+FROM ubuntu:22.04
+
+# Installiere Python und Basis-Tools
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
 # Setze Arbeitsverzeichnis
 WORKDIR /app
-
-# Installiere System-Abhängigkeiten für pygame (SDL2, Audio-Libraries)
-RUN apt-get update && apt-get install -y \
-    libsdl2-dev \
-    libsdl2-mixer-dev \
-    libsdl2-image-dev \
-    libsdl2-ttf-dev \
-    libportmidi-dev \
-    libswscale-dev \
-    libavformat-dev \
-    libavcodec-dev \
-    libfreetype6-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Kopiere requirements.txt und installiere Python-Abhängigkeiten
 COPY requirements.txt .
@@ -32,5 +25,5 @@ ENV FLASK_APP=app.py
 ENV PYTHONUNBUFFERED=1
 
 # Starte die Anwendung
-CMD ["python", "app.py"]
+CMD ["python3", "app.py"]
 

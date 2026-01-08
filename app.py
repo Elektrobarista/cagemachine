@@ -1,14 +1,16 @@
 from flask import Flask, render_template, jsonify, request
-from audio_controller import AudioController
+# AudioController no longer needed - audio playback is client-side
+# from audio_controller import AudioController
 from config import get_audio_paths
 from game_manager import GameManager
 from utils import format_duration
 
 app = Flask(__name__)
 
-# AudioController-Instanz erstellen
-intro_path, loop_path = get_audio_paths()
-audio = AudioController(intro_path=intro_path, loop_path=loop_path)
+# AudioController disabled - audio playback is now client-side
+# intro_path, loop_path = get_audio_paths()
+# audio = AudioController(intro_path=intro_path, loop_path=loop_path)
+audio = None  # Placeholder for compatibility
 
 # GameManager-Instanz erstellen
 game_manager = GameManager()
@@ -29,26 +31,23 @@ def statistics():
     return render_template("statistics.html")
 
 
-# Audio-API-Endpunkte
+# Audio-API-Endpunkte (stats-only, playback is client-side)
 @app.route("/api/start", methods=["POST"])
 def start():
-    """Startet Audio (Intro → Loop)"""
+    """Tracks audio start for statistics (playback is client-side)"""
     try:
         from datetime import datetime
-        audio.start()
-        status = audio.get_status()
         # Track Audio-Start für Statistiken
         audio_events.append({"started_at": datetime.now(), "ended_at": None, "duration": None})
-        return jsonify(status), 200
-    except FileNotFoundError as e:
-        return jsonify({"status": "error", "message": str(e)}), 404
+        # Return status as if audio started (client handles actual playback)
+        return jsonify({"status": "intro", "message": "Intro läuft …"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 @app.route("/api/start_at", methods=["POST"])
 def start_at():
-    """Startet Audio ab einer bestimmten Position (in Sekunden)"""
+    """Tracks audio start at position for statistics (playback is client-side)"""
     try:
         from datetime import datetime
         data = request.get_json() or {}
@@ -60,47 +59,40 @@ def start_at():
         except (ValueError, TypeError):
             return jsonify({"status": "error", "message": "Ungültige Position"}), 400
         
-        audio.start_at_position(position)
-        status = audio.get_status()
         # Track Audio-Start für Statistiken
         audio_events.append({"started_at": datetime.now(), "ended_at": None, "duration": None})
-        return jsonify(status), 200
-    except FileNotFoundError as e:
-        return jsonify({"status": "error", "message": str(e)}), 404
+        # Return status as if audio started (client handles actual playback)
+        return jsonify({"status": "intro", "message": "Intro läuft …"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 @app.route("/api/pause", methods=["POST"])
 def pause():
-    """Pausiert Audio"""
+    """Tracks audio pause (playback is client-side)"""
     try:
-        audio.pause()
-        status = audio.get_status()
-        return jsonify(status), 200
+        # Return status as if audio paused (client handles actual playback)
+        return jsonify({"status": "paused", "message": "pausiert"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 @app.route("/api/resume", methods=["POST"])
 def resume():
-    """Setzt Audio fort"""
+    """Tracks audio resume (playback is client-side)"""
     try:
-        audio.resume()
-        status = audio.get_status()
-        return jsonify(status), 200
+        # Return status as if audio resumed (client handles actual playback)
+        return jsonify({"status": "intro", "message": "Intro läuft …"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 @app.route("/api/stop", methods=["POST"])
 def stop():
-    """Stoppt Audio mit Fade-Out"""
+    """Tracks audio stop for statistics (playback is client-side)"""
     try:
         from datetime import datetime
         from utils import calculate_duration
-        audio.stop()
-        status = audio.get_status()
         # Track Audio-Ende für Statistiken
         if audio_events:
             last_event = audio_events[-1]
@@ -108,35 +100,33 @@ def stop():
                 last_event["ended_at"] = datetime.now()
                 if last_event["started_at"]:
                     last_event["duration"] = calculate_duration(last_event["started_at"], last_event["ended_at"])
-        return jsonify(status), 200
+        # Return status as if audio stopped (client handles actual playback)
+        return jsonify({"status": "stopped", "message": "bereit"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 @app.route("/api/status", methods=["GET"])
 def status():
-    """Gibt aktuellen Status zurück"""
+    """Returns default status (client handles actual playback)"""
     try:
-        status = audio.get_status()
-        return jsonify(status), 200
+        # Return default stopped status (client manages actual state)
+        return jsonify({"status": "stopped", "message": "bereit"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 @app.route("/api/position", methods=["GET"])
 def position():
-    """Gibt aktuelle Position zurück"""
+    """Returns default position (client handles actual playback)"""
     try:
-        pos = audio.get_position()
-        duration = audio.get_duration()
-        status_data = audio.get_status()
-        
+        # Return default values (client manages actual position)
         return jsonify({
-            "position": pos,
-            "duration": duration,
-            "intro_duration": audio.intro_duration,
-            "loop_duration": audio.loop_duration,
-            "is_looping": status_data["status"] == "looping"
+            "position": 0,
+            "duration": None,
+            "intro_duration": None,
+            "loop_duration": None,
+            "is_looping": False
         }), 200
     except Exception as e:
         return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500

@@ -395,12 +395,13 @@
       </div>
 
       <div style="margin-top: 24px; display: none;" id="headstartContainer">
-        <button class="btn-music btn-danger" id="btnHeadstart" style="width: 100%;">⚠️ DANGER! Headstart DANGER! ⚠️</button>
+        <button class="btn-music btn-danger" id="btnHeadstart" style="width: 100%; margin-bottom: 12px;">⚠️ Headstart 2:45 (165s)</button>
+        <button class="btn-music btn-danger" id="btnHeadstartLate" style="width: 100%;">⚠️ Headstart 7:45 (465s)</button>
       </div>
 
       <div class="status" id="status">Status: bereit</div>
       
-      <div class="scrubber-container">
+      <div class="scrubber-container" style="display: none;">
         <div class="scrubber-wrapper">
           <span class="time-display" id="timeDisplay">00:00</span>
         </div>
@@ -416,6 +417,178 @@
     // API-Endpunkte
     const API_BASE = "";
     
+        // Web-Audio basierter     // Web-Audio basierter Client-Side Audio Controller für eine Datei mit Intro+Loop
+    class ClientAudioController {
+      constructor(audioPath) {
+        // Timecodes in Sekunden (Cage-Loop-concat.ogg)
+        this.introEnd = 337.806;   // 5:37.806
+        this.loopStart = 337.806;  // Loop beginnt hier
+        this.loopEnd = 475.299;    // 7:55.299
+        this.crossfade = 0.02; // 20ms Crossfade
+
+        this.audioPath = audioPath;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.gain = this.ctx.createGain();
+        this.gain.connect(this.ctx.destination);
+
+        this.buffer = null;
+        this.state = "stopped"; // stopped, intro, looping, paused
+        this.startTime = null;
+        this.positionOffset = 0;
+        this.source = null;
+        this.pendingPosition = null;
+      }
+
+      async loadIfNeeded() {
+        if (this.buffer) return;
+        const resp = await fetch(this.audioPath);
+        const arr = await resp.arrayBuffer();
+        this.buffer = await this.ctx.decodeAudioData(arr);
+      }
+
+      stopSource() {
+        if (this.source) {
+          try { this.source.stop(); } catch {}
+          this.source.disconnect();
+        }
+        this.source = null;
+        this.pendingPosition = null;
+      }
+
+      scheduleLoop() {
+        this.stopSource();
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.buffer;
+        src.loop = true;
+        src.loopStart = this.loopStart;
+        src.loopEnd = this.loopEnd;
+        src.connect(this.gain);
+
+        const now = this.ctx.currentTime;
+        this.gain.gain.cancelScheduledValues(now);
+        this.gain.gain.setValueAtTime(this.gain.gain.value, now);
+        this.gain.gain.linearRampToValueAtTime(1.0, now + this.crossfade);
+
+        src.start(now, this.loopStart);
+        this.source = src;
+
+        this.positionOffset = this.loopStart;
+        this.startTime = this.ctx.currentTime;
+        this.state = "looping";
+      }
+
+      async start() {
+        await this.loadIfNeeded();
+        this.stopSource();
+
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.buffer;
+        src.loop = false;
+        src.connect(this.gain);
+
+        const now = this.ctx.currentTime;
+        this.gain.gain.setValueAtTime(1.0, now);
+
+        src.start(now, 0);
+        src.stop(now + this.introEnd); // Stoppt am Ende des Intros
+        src.onended = () => this.scheduleLoop();
+
+        this.source = src;
+        this.positionOffset = 0;
+        this.startTime = this.ctx.currentTime;
+        this.state = "intro";
+      }
+
+      async startAtPosition(seconds) {
+        this.pendingPosition = seconds;
+        await this.loadIfNeeded();
+        if (seconds < this.introEnd) {
+          this.stopSource();
+          const src = this.ctx.createBufferSource();
+          src.buffer = this.buffer;
+          src.loop = false;
+          src.connect(this.gain);
+
+          const now = this.ctx.currentTime;
+          src.start(now, seconds);
+          src.stop(now + (this.introEnd - seconds));
+          src.onended = () => this.scheduleLoop();
+
+          this.source = src;
+          this.positionOffset = seconds;
+          this.startTime = this.ctx.currentTime;
+          this.state = "intro";
+          this.pendingPosition = null;
+        } else {
+          this.stopSource();
+          const src = this.ctx.createBufferSource();
+          src.buffer = this.buffer;
+          src.loop = true;
+          src.loopStart = this.loopStart;
+          src.loopEnd = this.loopEnd;
+          src.connect(this.gain);
+
+          const loopPos = ((seconds - this.loopStart) % (this.loopEnd - this.loopStart)) + this.loopStart;
+          const now = this.ctx.currentTime;
+          src.start(now, loopPos);
+
+          this.source = src;
+          this.positionOffset = seconds;
+          this.startTime = this.ctx.currentTime;
+          this.state = "looping";
+          this.pendingPosition = null;
+        }
+      }
+
+      pause() {
+        if (this.state === "stopped") return;
+        this.ctx.suspend();
+        this.state = "paused";
+      }
+
+      async resume() {
+        if (this.state !== "paused") return;
+        await this.ctx.resume();
+        this.state = "looping";
+      }
+
+      stop() {
+        this.stopSource();
+        this.state = "stopped";
+        this.positionOffset = 0;
+        this.startTime = null;
+      }
+
+      getPosition() {
+        if (this.pendingPosition !== null) return this.pendingPosition;
+        if (!this.startTime || this.state === "stopped") return 0;
+        const elapsed = this.ctx.currentTime - this.startTime;
+        let pos = this.positionOffset + elapsed;
+        if (this.state === "looping") {
+          const loopLen = this.loopEnd - this.loopStart;
+          const inLoop = ((pos - this.loopStart) % loopLen + loopLen) % loopLen;
+          pos = this.loopStart + inLoop;
+        }
+        return pos;
+      }
+
+      getDuration() {
+        return this.loopEnd; // gesamt: Intro + Loop-Segment
+      }
+
+      getStatus() {
+        const map = {
+          stopped: "bereit",
+          intro: "Intro läuft …",
+          looping: "Loop läuft (Endlosschleife) …",
+          paused: "pausiert"
+        };
+        return { status: this.state, message: map[this.state] || "unbekannt" };
+      }
+    }
+// Initialize client audio controller
+    let clientAudio = null;
+    
     // DOM-Elemente
     const btnCreateEvening = document.getElementById("btnCreateEvening");
     const btnCreateSession = document.getElementById("btnCreateSession");
@@ -430,10 +603,16 @@
     const btnPause = document.getElementById("btnPause");
     const btnStop = document.getElementById("btnStop");
     const btnHeadstart = document.getElementById("btnHeadstart");
+    const btnHeadstartLate = document.getElementById("btnHeadstartLate");
     const headstartContainer = document.getElementById("headstartContainer");
     const linkShowHeadstart = document.getElementById("linkShowHeadstart");
     const statusEl = document.getElementById("status");
     const timeDisplay = document.getElementById("timeDisplay");
+
+    // Initialize client audio controller when DOM is ready
+    const introPath = "/static/RageCage_Intro.ogg";
+    const loopPath = "/static/RageCage_Gas.ogg";
+    clientAudio = new ClientAudioController("/static/Cage-Loop-concat.ogg");
 
     // State
     let currentEveningId = null;
@@ -690,22 +869,29 @@
     }
     
     async function updatePosition() {
-      const data = await apiCall("/api/position", "GET");
-      if (data.position !== undefined) {
-        currentPosition = data.position;
-        // Nur duration setzen, wenn sie auch definiert ist
-        if (data.duration !== undefined) {
-          totalDuration = data.duration;
-        }
+      if (clientAudio) {
+        currentPosition = clientAudio.getPosition();
+        totalDuration = clientAudio.getDuration();
         timeDisplay.textContent = formatTime(currentPosition);
+      } else {
+        // Fallback to server API
+        const data = await apiCall("/api/position", "GET");
+        if (data.position !== undefined) {
+          currentPosition = data.position;
+          // Nur duration setzen, wenn sie auch definiert ist
+          if (data.duration !== undefined) {
+            totalDuration = data.duration;
+          }
+          timeDisplay.textContent = formatTime(currentPosition);
+        }
       }
     }
 
     async function updateStatus() {
-      const data = await apiCall("/api/status", "GET");
-      if (data.status) {
-        currentStatus = data.status;
-        const statusText = data.message || statusTexts[data.status] || data.status;
+      if (clientAudio) {
+        const status = clientAudio.getStatus();
+        currentStatus = status.status;
+        const statusText = status.message;
         statusEl.textContent = `Status: ${statusText}`;
         if (currentStatus === "intro" || currentStatus === "looping") {
           statusEl.classList.add("active");
@@ -713,6 +899,20 @@
           statusEl.classList.remove("active");
         }
         updateButtonStates();
+      } else {
+        // Fallback to server API
+        const data = await apiCall("/api/status", "GET");
+        if (data.status) {
+          currentStatus = data.status;
+          const statusText = data.message || statusTexts[data.status] || data.status;
+          statusEl.textContent = `Status: ${statusText}`;
+          if (currentStatus === "intro" || currentStatus === "looping") {
+            statusEl.classList.add("active");
+          } else {
+            statusEl.classList.remove("active");
+          }
+          updateButtonStates();
+        }
       }
     }
 
@@ -757,28 +957,93 @@
     });
 
     btnStart.addEventListener("click", async () => {
-      if (currentStatus === "paused") {
-        const data = await apiCall("/api/resume");
-        if (data.status) {
-          currentStatus = data.status;
-          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-          updateButtonStates();
+      if (clientAudio) {
+        if (clientAudio.state === "paused") {
+          clientAudio.resume();
+        } else {
+          clientAudio.start();
+        }
+        const status = clientAudio.getStatus();
+        currentStatus = status.status;
+        statusEl.textContent = `Status: ${status.message}`;
+        updateButtonStates();
+        
+        // Optionally sync with server for statistics
+        try {
+          await apiCall("/api/start");
+        } catch (e) {
+          console.error("Failed to sync with server:", e);
         }
       } else {
-        const data = await apiCall("/api/start");
-        if (data.status) {
-          currentStatus = data.status;
-          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-          updateButtonStates();
+        // Fallback to server API
+        if (currentStatus === "paused") {
+          const data = await apiCall("/api/resume");
+          if (data.status) {
+            currentStatus = data.status;
+            statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+            updateButtonStates();
+          }
+        } else {
+          const data = await apiCall("/api/start");
+          if (data.status) {
+            currentStatus = data.status;
+            statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+            updateButtonStates();
+          }
         }
       }
     });
 
     btnPause.addEventListener("click", async () => {
-      if (currentStatus === "paused") {
-        btnStart.click();
+      if (clientAudio) {
+        if (clientAudio.state === "paused") {
+          clientAudio.resume();
+        } else {
+          clientAudio.pause();
+        }
+        const status = clientAudio.getStatus();
+        currentStatus = status.status;
+        statusEl.textContent = `Status: ${status.message}`;
+        updateButtonStates();
+        
+        // Optionally sync with server
+        try {
+          await apiCall("/api/pause");
+        } catch (e) {
+          console.error("Failed to sync with server:", e);
+        }
       } else {
-        const data = await apiCall("/api/pause");
+        // Fallback to server API
+        if (currentStatus === "paused") {
+          btnStart.click();
+        } else {
+          const data = await apiCall("/api/pause");
+          if (data.status) {
+            currentStatus = data.status;
+            statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+            updateButtonStates();
+          }
+        }
+      }
+    });
+
+    btnStop.addEventListener("click", async () => {
+      if (clientAudio) {
+        clientAudio.stop();
+        const status = clientAudio.getStatus();
+        currentStatus = status.status;
+        statusEl.textContent = `Status: ${status.message}`;
+        updateButtonStates();
+        
+        // Optionally sync with server
+        try {
+          await apiCall("/api/stop");
+        } catch (e) {
+          console.error("Failed to sync with server:", e);
+        }
+      } else {
+        // Fallback to server API
+        const data = await apiCall("/api/stop");
         if (data.status) {
           currentStatus = data.status;
           statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
@@ -787,26 +1052,42 @@
       }
     });
 
-    btnStop.addEventListener("click", async () => {
-      const data = await apiCall("/api/stop");
-      if (data.status) {
-        currentStatus = data.status;
-        statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+    const headstartPlay = async (seconds) => {
+      if (clientAudio) {
+        // Sofort Anzeige setzen
+        currentPosition = seconds;
+        timeDisplay.textContent = formatTime(currentPosition);
+        await clientAudio.startAtPosition(seconds);
+        const status = clientAudio.getStatus();
+        currentStatus = status.status;
+        currentPosition = clientAudio.getPosition();
+        totalDuration = clientAudio.getDuration();
+        statusEl.textContent = `Status: ${status.message}`;
+        timeDisplay.textContent = formatTime(currentPosition);
         updateButtonStates();
+        try {
+          await apiCall("/api/start_at", "POST", { position: seconds });
+        } catch (e) {
+          console.error("Failed to sync with server:", e);
+        }
+      } else {
+        const data = await apiCall("/api/start_at", "POST", { position: seconds });
+        if (data.status) {
+          currentStatus = data.status;
+          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
+          updateButtonStates();
+        } else if (data.error) {
+          alert(data.error);
+        }
       }
-    });
+    };
 
     btnHeadstart.addEventListener("click", async () => {
-      // Starte bei 2:45 Minuten (165 Sekunden)
-      const headstartPosition = 165;
-      const data = await apiCall("/api/start_at", "POST", { position: headstartPosition });
-      if (data.status) {
-        currentStatus = data.status;
-        statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-        updateButtonStates();
-      } else if (data.error) {
-        alert(data.error);
-      }
+      await headstartPlay(165); // 2:45
+    });
+
+    btnHeadstartLate.addEventListener("click", async () => {
+      await headstartPlay(465); // 7:45
     });
 
     // Link "Ich weiß was ich mache!" - zeigt/versteckt den Headstart-Button
