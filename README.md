@@ -15,23 +15,13 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Hinweis zu pygame:** pygame benötigt möglicherweise zusätzliche System-Bibliotheken:
+### 3. Audio-Datei
 
-- **macOS:** Sollte normalerweise ohne zusätzliche Installation funktionieren
-- **Linux (Ubuntu/Debian):** 
-  ```bash
-  sudo apt-get install python3-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
-  ```
-- **Windows:** Sollte über pip installierbar sein
+Die Wiedergabe nutzt eine einzige zusammengeschnittene Datei:
 
-### 3. Audio-Dateien hinzufügen
+- `static/Cage-Loop-concat.ogg` - Intro + Loop in einer Datei
 
-Legen Sie Ihre Audio-Dateien in den `static/` Ordner:
-
-- `static/intro.ogg` (oder `intro.mp3`) - Intro-Musik
-- `static/loop.ogg` (oder `loop.mp3`) - Loop-Musik für Endlosschleife
-
-**Wichtig für nahtlose Loops:** Die Loop-Datei sollte so geschnitten sein, dass Anfang und Ende nahtlos ineinander übergehen.
+Die Loop-Punkte (`loopStart`/`loopEnd`) sind in `templates/index.html` fest auf diese Datei abgestimmt. Wird die Datei ausgetauscht, müssen die Timecodes dort angepasst werden.
 
 ## Verwendung
 
@@ -42,11 +32,17 @@ source .venv/bin/activate   # Falls noch nicht aktiviert
 python app.py
 ```
 
-Der Server läuft dann auf `http://127.0.0.1:8000`
+Der Server läuft dann auf `http://127.0.0.1:3000` (Host/Port über `FLASK_HOST`/`FLASK_PORT` konfigurierbar).
+
+Alternativ mit Docker:
+
+```bash
+docker compose up
+```
 
 ### Im Browser öffnen
 
-Öffnen Sie `http://127.0.0.1:8000` in Ihrem Browser.
+Öffnen Sie `http://127.0.0.1:3000` in Ihrem Browser.
 
 ### Steuerung
 
@@ -61,46 +57,35 @@ Der Server läuft dann auf `http://127.0.0.1:8000`
 
 ## API-Endpunkte
 
-Die Anwendung stellt folgende REST-API-Endpunkte bereit:
+Die Wiedergabe läuft clientseitig im Browser; die Audio-Endpunkte dienen dem Statistik-Tracking:
 
-- `POST /api/start` - Startet Audio (Intro → Loop)
-- `POST /api/pause` - Pausiert Audio
-- `POST /api/resume` - Setzt Audio fort
-- `POST /api/stop` - Stoppt Audio mit Fade-Out
+- `POST /api/start` - Trackt Audio-Start
+- `POST /api/pause` - Trackt Pause
+- `POST /api/resume` - Trackt Fortsetzen
+- `POST /api/stop` - Trackt Stop
 - `GET /api/status` - Gibt aktuellen Status zurück
+- `GET /api/statistics/audio` - Gibt Audio-Statistiken zurück
+
+Dazu kommen die Endpunkte des GameManagers für Abende, Runden und Spieler (siehe `app.py`).
 
 ## Technische Details
 
 ### Nahtloser Loop
 
-Der AudioController verwendet `pygame.mixer.music.queue()` für nahtlosen Übergang von Intro zu Loop. Ein Thread überwacht den Intro-Progress und bereitet den Loop vor, sodass der Übergang ohne hörbare Unterbrechung erfolgt.
-
-### Fade-Out
-
-Beim Stop wird `pygame.mixer.music.fadeout(2000)` verwendet, um die Musik über 2 Sekunden auszublenden.
-
-### Thread-Safety
-
-Alle Audio-Operationen sind thread-safe mit `threading.Lock()` geschützt.
+Die Audio-Wiedergabe läuft clientseitig im Browser über die Web Audio API. Eine zusammengeschnittene Datei (Intro + Loop) wird als `AudioBuffer` geladen; das Looping erfolgt sample-genau über `loop`, `loopStart` und `loopEnd` des `AudioBufferSourceNode`. Die Server-API dient nur noch dem Statistik-Tracking.
 
 ## Fehlerbehebung
 
-### Audio-Dateien werden nicht gefunden
+### Audio-Datei wird nicht gefunden
 
-- Stellen Sie sicher, dass die Dateien im `static/` Ordner liegen
-- Dateinamen müssen exakt `intro.ogg`/`intro.mp3` und `loop.ogg`/`loop.mp3` sein
+- Stellen Sie sicher, dass `static/Cage-Loop-concat.ogg` existiert
 - Prüfen Sie die Dateiberechtigungen
-
-### pygame Installation schlägt fehl
-
-- Installieren Sie die erforderlichen System-Bibliotheken (siehe Installation)
-- Versuchen Sie: `pip install --upgrade pygame`
 
 ### Kein Audio-Output
 
 - Prüfen Sie die System-Lautstärke
-- Stellen Sie sicher, dass pygame korrekt initialisiert wurde
 - Prüfen Sie die Audio-Dateien (Format, Codec)
+- Die Wiedergabe startet erst nach einer Nutzer-Interaktion (Browser-Autoplay-Richtlinie)
 
 ## Lizenz
 

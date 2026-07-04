@@ -1,6 +1,2 @@
 # Web Framework
 flask>=3.0.0
-
-# Audio Playback
-pygame>=2.5.0
-

@@ -1,16 +1,8 @@
 from flask import Flask, render_template, jsonify, request
-# AudioController no longer needed - audio playback is client-side
-# from audio_controller import AudioController
-from config import get_audio_paths
 from game_manager import GameManager
 from utils import format_duration
 
 app = Flask(__name__)
-
-# AudioController disabled - audio playback is now client-side
-# intro_path, loop_path = get_audio_paths()
-# audio = AudioController(intro_path=intro_path, loop_path=loop_path)
-audio = None  # Placeholder for compatibility
 
 # GameManager-Instanz erstellen
 game_manager = GameManager()
