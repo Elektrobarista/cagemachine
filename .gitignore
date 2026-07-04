@@ -208,3 +208,6 @@ __marimo__/
 
 # Lokale Notizen
 KONZEPT.md
+
+# SQLite-Daten
+data/

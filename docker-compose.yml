@@ -9,6 +9,8 @@ services:
     volumes:
       # Optional: Mount static files wenn du sie ändern willst ohne Rebuild
       - ./static:/app/static:ro
+      # SQLite-Daten (Abende, Spieler, Runden) über Container-Neustarts hinweg
+      - ./data:/app/data
     environment:
       - FLASK_ENV=production
       - FLASK_HOST=0.0.0.0

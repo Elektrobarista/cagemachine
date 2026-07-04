@@ -263,13 +263,15 @@
       audioContainer.innerHTML = tableHTML;
     }
 
-    async function checkCurrentEvening() {
-      const data = await apiCall("/api/evening/current", "GET");
-      if (data.evening) {
-        // Zeige Link zum laufenden Abend
-        document.getElementById("backToEveningLink").style.display = "inline-block";
+    function checkCurrentEvening() {
+      // Zuletzt genutzter Abend-Code aus dem Browser (kein Server-Zustand mehr)
+      const lastCode = localStorage.getItem("cagemachine:lastEveningCode");
+      const link = document.getElementById("backToEveningLink");
+      if (lastCode) {
+        link.href = `/abend/${lastCode}`;
+        link.style.display = "inline-block";
       } else {
-        document.getElementById("backToEveningLink").style.display = "none";
+        link.style.display = "none";
       }
     }
 
@@ -279,7 +281,6 @@
 
     // Auto-refresh every 30 seconds
     setInterval(loadStatistics, 30000);
-    setInterval(checkCurrentEvening, 30000);
   </script>
 </body>
 </html>

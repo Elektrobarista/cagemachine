@@ -1,123 +1,115 @@
-"""Business-Logik für Abend- und Session-Management"""
-from typing import Optional, List
+"""Business-Logik für Abend- und Spieler-Management (SQLite-basiert)"""
+import random
+import uuid
 from datetime import datetime
-from models import Evening, Session, Player
-import threading
+
+import db
+
+# Ohne verwechselbare Zeichen (kein 0/O, 1/I/L)
+CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+CODE_LENGTH = 4
+
+
+class EveningNotFound(Exception):
+    """Abend zu einem Code existiert nicht"""
+
+
+def _now():
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _generate_code():
+    return "".join(random.choices(CODE_ALPHABET, k=CODE_LENGTH))
+
+
+def _player_dict(row):
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "position": row["position"],
+        "added_at": row["added_at"],
+    }
 
 
 class GameManager:
-    """Verwaltet Abende und Sessions"""
-    
+    """Verwaltet Abende und Spieler in SQLite"""
+
     def __init__(self):
-        """Initialisiert den GameManager mit leeren Storage-Dictionaries"""
-        self.evenings = {}  # evening_id -> Evening
-        self.sessions = {}  # session_id -> Session
-        self.current_evening_id = None
-        # RLock für thread-sicheren Zugriff
-        self._lock = threading.RLock()
-    
-    # Evening-Management
-    def create_evening(self) -> Evening:
-        """Erstellt einen neuen Abend und setzt ihn als aktuellen Abend"""
-        evening = Evening.create()
-        self.evenings[evening.id] = evening
-        self.current_evening_id = evening.id
-        return evening
-    
-    def get_current_evening(self) -> Optional[Evening]:
-        """Gibt den aktuellen Abend zurück"""
-        if self.current_evening_id and self.current_evening_id in self.evenings:
-            return self.evenings[self.current_evening_id]
-        return None
-    
-    def get_evening(self, evening_id: str) -> Optional[Evening]:
-        """Gibt einen spezifischen Abend zurück"""
-        return self.evenings.get(evening_id)
-    
-    def get_sessions_by_evening(self, evening_id: str) -> List[Session]:
-        """Gibt alle Sessions eines Abends zurück"""
-        evening = self.get_evening(evening_id)
-        if not evening:
-            return []
-        
-        sessions = []
-        for session_id in evening.sessions:
-            if session_id in self.sessions:
-                sessions.append(self.sessions[session_id])
-        return sessions
-    
-    # Session-Management
-    def create_session(self, evening_id: Optional[str] = None) -> Session:
-        """
-        Erstellt eine neue Session
-        
-        Args:
-            evening_id: ID des Abends, zu dem die Session gehört (optional)
-        
-        Returns:
-            Session: Die erstellte Session
-        """
-        with self._lock:
-            session = Session.create(evening_id=evening_id)
-            self.sessions[session.id] = session
-            
-            # Füge Session zum Abend hinzu, falls evening_id angegeben
-            if evening_id and evening_id in self.evenings:
-                evening = self.evenings[evening_id]
-                if session.id not in evening.sessions:
-                    evening.sessions.append(session.id)
-                # Setze als aktuelle Session, falls noch keine gesetzt
-                if not evening.current_session_id:
-                    evening.current_session_id = session.id
-            
-            return session
-    
-    def get_session(self, session_id: str) -> Optional[Session]:
-        """Gibt eine Session zurück"""
-        return self.sessions.get(session_id)
-    
-    def add_player_to_session(self, session_id: str, player_name: str) -> Session:
-        """
-        Fügt einen Spieler zu einer Session hinzu
-        
-        Args:
-            session_id: ID der Session
-            player_name: Name des Spielers
-        
-        Returns:
-            Session: Die aktualisierte Session
-        """
-        with self._lock:
-            if session_id not in self.sessions:
-                raise ValueError(f"Session {session_id} nicht gefunden")
-            
-            session = self.sessions[session_id]
-            
-            # Prüfe ob Spielername bereits existiert
-            if any(p.name == player_name for p in session.players):
-                raise ValueError(f"Spielername '{player_name}' bereits vorhanden")
-            
-            player = Player.create(player_name)
-            session.players.append(player)
-            
-            return session
-    
-    def remove_player_from_session(self, session_id: str, player_id: str) -> Session:
-        """
-        Entfernt einen Spieler aus einer Session
-        
-        Args:
-            session_id: ID der Session
-            player_id: ID des Spielers
-        
-        Returns:
-            Session: Die aktualisierte Session
-        """
-        with self._lock:
-            if session_id not in self.sessions:
-                raise ValueError(f"Session {session_id} nicht gefunden")
-            
-            session = self.sessions[session_id]
-            session.players = [p for p in session.players if p.id != player_id]
-            
-            return session
+        db.init_db()
+
+    def create_evening(self):
+        """Erstellt einen neuen Abend mit eindeutigem Code"""
+        with db.connect() as conn:
+            for _ in range(20):
+                code = _generate_code()
+                exists = conn.execute(
+                    "SELECT 1 FROM evening WHERE code = ?", (code,)
+                ).fetchone()
+                if not exists:
+                    break
+            else:
+                raise RuntimeError("Konnte keinen freien Abend-Code erzeugen")
+
+            evening_id = str(uuid.uuid4())
+            now = _now()
+            conn.execute(
+                "INSERT INTO evening (id, code, created_at, last_used_at) VALUES (?, ?, ?, ?)",
+                (evening_id, code, now, now),
+            )
+        return self.get_evening(code)
+
+    def get_evening(self, code):
+        """Lädt einen Abend samt aktiver Spieler; aktualisiert last_used_at"""
+        code = code.strip().upper()
+        with db.connect() as conn:
+            evening = conn.execute(
+                "SELECT * FROM evening WHERE code = ?", (code,)
+            ).fetchone()
+            if not evening:
+                raise EveningNotFound(f"Kein Abend mit Code '{code}' gefunden")
+
+            conn.execute(
+                "UPDATE evening SET last_used_at = ? WHERE id = ?",
+                (_now(), evening["id"]),
+            )
+            players = conn.execute(
+                "SELECT * FROM player WHERE evening_id = ? AND active = 1"
+                " ORDER BY position IS NULL, position, added_at",
+                (evening["id"],),
+            ).fetchall()
+
+        return {
+            "code": evening["code"],
+            "created_at": evening["created_at"],
+            "players": [_player_dict(p) for p in players],
+        }
+
+    def add_player(self, code, name):
+        """Fügt einen Spieler zum Abend hinzu (Name eindeutig unter aktiven Spielern)"""
+        evening = self.get_evening(code)
+        if any(p["name"].lower() == name.lower() for p in evening["players"]):
+            raise ValueError(f"Spielername '{name}' bereits vorhanden")
+
+        with db.connect() as conn:
+            evening_id = conn.execute(
+                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
+            ).fetchone()["id"]
+            conn.execute(
+                "INSERT INTO player (id, evening_id, name, active, added_at)"
+                " VALUES (?, ?, ?, 1, ?)",
+                (str(uuid.uuid4()), evening_id, name, _now()),
+            )
+        return self.get_evening(code)
+
+    def deactivate_player(self, code, player_id):
+        """Deaktiviert einen Spieler (bleibt für Statistik erhalten)"""
+        evening = self.get_evening(code)
+        if not any(p["id"] == player_id for p in evening["players"]):
+            raise ValueError("Spieler nicht gefunden")
+
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE player SET active = 0, position = NULL WHERE id = ?",
+                (player_id,),
+            )
+        return self.get_evening(code)

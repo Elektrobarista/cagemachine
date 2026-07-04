@@ -1,10 +1,10 @@
 from flask import Flask, render_template, jsonify, request
-from game_manager import GameManager
+from game_manager import GameManager, EveningNotFound
 from utils import format_duration
 
 app = Flask(__name__)
 
-# GameManager-Instanz erstellen
+# GameManager-Instanz erstellen (initialisiert die SQLite-DB)
 game_manager = GameManager()
 
 # Audio-Events für Statistiken tracken
@@ -14,6 +14,12 @@ audio_events = []  # Liste von {"started_at": datetime, "ended_at": datetime, "d
 @app.route("/")
 def index():
     """Hauptseite rendern"""
+    return render_template("index.html")
+
+
+@app.route("/abend/<code>")
+def evening_page(code):
+    """Hauptseite mit vorausgewähltem Abend (Wiederaufnahme per Link)"""
     return render_template("index.html")
 
 
@@ -125,106 +131,56 @@ def position():
 
 
 # Evening-API-Endpunkte
-@app.route("/api/evening/create", methods=["POST"])
+@app.route("/api/evening", methods=["POST"])
 def create_evening():
-    """Erstellt einen neuen Abend"""
+    """Erstellt einen neuen Abend und liefert dessen Code"""
     try:
         evening = game_manager.create_evening()
-        return jsonify({"evening": evening.to_dict()}), 200
+        return jsonify({"evening": evening}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/evening/current", methods=["GET"])
-def get_current_evening():
-    """Gibt den aktuellen Abend zurück"""
+@app.route("/api/evening/<code>", methods=["GET"])
+def get_evening(code):
+    """Lädt einen Abend über seinen Code (Wiederaufnahme)"""
     try:
-        evening = game_manager.get_current_evening()
-        if evening:
-            return jsonify({"evening": evening.to_dict()}), 200
-        return jsonify({"evening": None}), 200
+        evening = game_manager.get_evening(code)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/evening/<evening_id>", methods=["GET"])
-def get_evening(evening_id):
-    """Gibt einen spezifischen Abend zurück"""
-    try:
-        evening = game_manager.get_evening(evening_id)
-        if evening:
-            return jsonify({"evening": evening.to_dict()}), 200
-        return jsonify({"error": "Abend nicht gefunden"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/evening/<evening_id>/sessions", methods=["GET"])
-def get_sessions_by_evening(evening_id):
-    """Gibt alle Sessions eines Abends zurück"""
-    try:
-        sessions = game_manager.get_sessions_by_evening(evening_id)
-        return jsonify({"sessions": [s.to_dict() for s in sessions]}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# Session-API-Endpunkte
-@app.route("/api/session/create", methods=["POST"])
-def create_session():
-    """Erstellt eine neue Session"""
-    try:
-        data = request.get_json() or {}
-        evening_id = data.get("evening_id")
-        session = game_manager.create_session(evening_id=evening_id)
-        return jsonify({"session_id": session.id, "session": session.to_dict()}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/session/current", methods=["GET"])
-def get_current_session():
-    """Gibt die aktuelle Session zurück (für zukünftige Erweiterungen)"""
-    # Aktuell gibt es keine "aktuelle Session" - könnte später implementiert werden
-    return jsonify({"session": None}), 200
-
-
-@app.route("/api/session/<session_id>", methods=["GET"])
-def get_session(session_id):
-    """Gibt eine Session zurück"""
-    try:
-        session = game_manager.get_session(session_id)
-        if session:
-            return jsonify({"session": session.to_dict()}), 200
-        return jsonify({"error": "Session nicht gefunden"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/session/<session_id>/players", methods=["POST"])
-def add_player(session_id):
-    """Fügt einen Spieler zur Session hinzu"""
+@app.route("/api/evening/<code>/players", methods=["POST"])
+def add_player(code):
+    """Fügt einen Spieler zum Abend hinzu"""
     try:
         data = request.get_json() or {}
         player_name = data.get("name", "").strip()
-        
+
         if not player_name:
             return jsonify({"error": "Spielername darf nicht leer sein"}), 400
-        
-        session = game_manager.add_player_to_session(session_id, player_name)
-        return jsonify({"session": session.to_dict()}), 200
+
+        evening = game_manager.add_player(code, player_name)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/session/<session_id>/players/<player_id>", methods=["DELETE"])
-def remove_player(session_id, player_id):
-    """Entfernt einen Spieler aus der Session"""
+@app.route("/api/evening/<code>/players/<player_id>", methods=["DELETE"])
+def remove_player(code, player_id):
+    """Deaktiviert einen Spieler (bleibt für Statistik erhalten)"""
     try:
-        session = game_manager.remove_player_from_session(session_id, player_id)
-        return jsonify({"session": session.to_dict()}), 200
+        evening = game_manager.deactivate_player(code, player_id)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:

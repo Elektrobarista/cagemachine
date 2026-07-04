@@ -334,26 +334,26 @@
       
       <h1>🍺 Rage Cage</h1>
       
-      <div class="session-controls">
+      <div class="session-controls" id="eveningStartControls">
         <button class="btn btn-primary" id="btnCreateEvening">Neuen Abend starten</button>
-        <button class="btn btn-secondary" id="btnCreateSession" style="display: none;">Neue Session starten</button>
+      </div>
+
+      <div class="player-input-group" id="resumeGroup">
+        <input
+          type="text"
+          class="input"
+          id="resumeCodeInput"
+          placeholder="Abend-Code eingeben..."
+          maxlength="8"
+          style="text-transform: uppercase;"
+        />
+        <button class="btn btn-secondary btn-small" id="btnResumeEvening">Fortsetzen</button>
       </div>
 
       <div id="eveningInfo" class="session-info" style="display: none;">
         <div class="session-info-item">
-          <span class="session-info-label">Abend ID:</span>
-          <span class="session-info-value" id="eveningId">-</span>
-        </div>
-        <div class="session-info-item">
-          <span class="session-info-label">Sessions:</span>
-          <span class="session-info-value" id="sessionCount">0</span>
-        </div>
-      </div>
-
-      <div id="sessionInfo" class="session-info" style="display: none;">
-        <div class="session-info-item">
-          <span class="session-info-label">Session ID:</span>
-          <span class="session-info-value" id="sessionId">-</span>
+          <span class="session-info-label">Abend-Code:</span>
+          <span class="session-info-value" id="eveningCode" style="font-size: 24px; font-weight: 700; letter-spacing: 3px;">-</span>
         </div>
         <div class="session-info-item">
           <span class="session-info-label">Spieler:</span>
@@ -591,9 +591,11 @@
     
     // DOM-Elemente
     const btnCreateEvening = document.getElementById("btnCreateEvening");
-    const btnCreateSession = document.getElementById("btnCreateSession");
+    const btnResumeEvening = document.getElementById("btnResumeEvening");
+    const resumeCodeInput = document.getElementById("resumeCodeInput");
+    const resumeGroup = document.getElementById("resumeGroup");
+    const eveningStartControls = document.getElementById("eveningStartControls");
     const eveningInfo = document.getElementById("eveningInfo");
-    const sessionInfo = document.getElementById("sessionInfo");
     const playerSection = document.getElementById("playerSection");
     const playerNameInput = document.getElementById("playerNameInput");
     const btnAddPlayer = document.getElementById("btnAddPlayer");
@@ -615,10 +617,8 @@
     clientAudio = new ClientAudioController("/static/Cage-Loop-concat.ogg");
 
     // State
-    let currentEveningId = null;
-    let currentEvening = null;
-    let currentSessionId = null;
-    let currentSession = null;
+    let currentEvening = null;   // {code, created_at, players}
+    let currentCode = null;
     let currentStatus = "stopped";
     let statusPollInterval = null;
     let positionPollInterval = null;
@@ -669,122 +669,68 @@
     }
 
     // Evening Management
+    const LAST_CODE_KEY = "cagemachine:lastEveningCode";
+
+    function setEvening(evening) {
+      currentEvening = evening;
+      currentCode = evening ? evening.code : null;
+      if (currentCode) {
+        localStorage.setItem(LAST_CODE_KEY, currentCode);
+        // Code in die URL, damit der Link teilbar ist
+        const targetPath = `/abend/${currentCode}`;
+        if (window.location.pathname !== targetPath) {
+          history.replaceState(null, "", targetPath);
+        }
+      }
+      updateEveningUI();
+    }
+
     async function createEvening() {
       // Deaktiviere Button sofort, um Doppelklicks zu verhindern
       btnCreateEvening.disabled = true;
       try {
-        const data = await apiCall("/api/evening/create", "POST");
+        const data = await apiCall("/api/evening", "POST");
         if (data.evening) {
-          currentEveningId = data.evening.id;
-          currentEvening = data.evening;
-          try {
-            updateEveningUI();
-          } catch (uiError) {
-            console.error("Fehler beim Aktualisieren der Evening-UI:", uiError);
-            // UI-Fehler sind nicht kritisch, weiter mit Session-Erstellung
-          }
-          
-          // Bug Fix: Handle exceptions from createSession() to prevent inconsistent state
-          try {
-            await createSession();
-          } catch (sessionError) {
-            console.error("Fehler beim Erstellen der Session:", sessionError);
-            alert("Abend wurde erstellt, aber die Session konnte nicht erstellt werden. Bitte erstelle die Session manuell.");
-            // Evening bleibt bestehen, da es bereits auf dem Server erstellt wurde
-            // Benutzer kann Session manuell erstellen
-          }
+          setEvening(data.evening);
         } else if (data.error) {
           alert(data.error);
         }
-      } catch (error) {
-        // Fange alle anderen unerwarteten Fehler ab
-        console.error("Unerwarteter Fehler beim Erstellen des Abends:", error);
-        alert("Ein Fehler ist beim Erstellen des Abends aufgetreten: " + (error.message || "Unbekannter Fehler"));
       } finally {
-        // Reaktiviere Button nach Abschluss (oder Fehler)
         btnCreateEvening.disabled = false;
       }
     }
 
-    async function loadEvening() {
-      const data = await apiCall("/api/evening/current", "GET");
+    async function loadEvening(code) {
+      code = (code || "").trim().toUpperCase();
+      if (!code) return false;
+
+      const data = await apiCall(`/api/evening/${encodeURIComponent(code)}`, "GET");
       if (data.evening) {
-        currentEveningId = data.evening.id;
-        currentEvening = data.evening;
-        updateEveningUI();
-        
-        // Lade Sessions des Abends, falls vorhanden
-        if (data.evening.sessions && data.evening.sessions.length > 0) {
-          // Lade die aktuelle Session oder die erste Session
-          const sessionId = data.evening.current_session_id || data.evening.sessions[0];
-          if (sessionId && sessionId !== currentSessionId) {
-            const sessionData = await apiCall(`/api/session/${sessionId}`, "GET");
-            if (sessionData.session) {
-              currentSessionId = sessionData.session.id;
-              currentSession = sessionData.session;
-              updateSessionUI();
-            }
-          }
-        }
-      } else {
-        // Reset evening state when no evening exists
-        currentEveningId = null;
-        currentEvening = null;
-        currentSessionId = null;
-        currentSession = null;
-        updateEveningUI();
-        updateSessionUI();
+        setEvening(data.evening);
+        return true;
       }
+      if (data.error) {
+        alert(data.error);
+      }
+      return false;
     }
 
-    // Session Management
-    async function createSession() {
-      // Deaktiviere Button sofort, um Doppelklicks zu verhindern
-      if (btnCreateSession) {
-        btnCreateSession.disabled = true;
-      }
+    async function resumeEvening() {
+      btnResumeEvening.disabled = true;
       try {
-        const eveningId = currentEveningId || null;
-        const data = await apiCall("/api/session/create", "POST", { evening_id: eveningId });
-        if (data.session_id) {
-          currentSessionId = data.session_id;
-          currentSession = data.session;
-          try {
-            updateSessionUI();
-          } catch (uiError) {
-            console.error("Fehler beim Aktualisieren der Session-UI:", uiError);
-            // UI-Fehler sind nicht kritisch, weiter mit loadEvening()
-          }
-          // Lade Abend neu, um Session-Liste zu aktualisieren
-          try {
-            await loadEvening();
-          } catch (loadError) {
-            console.error("Fehler beim Laden des Abends:", loadError);
-            // Fehler beim Laden ist nicht kritisch, Session wurde bereits erstellt
-          }
-        } else if (data.error) {
-          alert(data.error);
-        }
-      } catch (error) {
-        // Fange alle anderen unerwarteten Fehler ab und werfe sie weiter
-        console.error("Unerwarteter Fehler beim Erstellen der Session:", error);
-        throw error; // Werfe weiter, damit createEvening() den Fehler behandeln kann
+        await loadEvening(resumeCodeInput.value);
       } finally {
-        // Reaktiviere Button nach Abschluss (oder Fehler)
-        if (btnCreateSession) {
-          btnCreateSession.disabled = false;
-        }
+        btnResumeEvening.disabled = false;
       }
     }
 
     async function addPlayer() {
       const name = playerNameInput.value.trim();
-      if (!name || !currentSessionId) return;
+      if (!name || !currentCode) return;
 
-      const data = await apiCall(`/api/session/${currentSessionId}/players`, "POST", { name });
-      if (data.session) {
-        currentSession = data.session;
-        updateSessionUI();
+      const data = await apiCall(`/api/evening/${currentCode}/players`, "POST", { name });
+      if (data.evening) {
+        setEvening(data.evening);
         playerNameInput.value = "";
         playerNameInput.focus();
       } else if (data.error) {
@@ -793,11 +739,12 @@
     }
 
     window.removePlayer = async function(playerId) {
-      if (!currentSessionId) return;
-      const data = await apiCall(`/api/session/${currentSessionId}/players/${playerId}`, "DELETE");
-      if (data.session) {
-        currentSession = data.session;
-        updateSessionUI();
+      if (!currentCode) return;
+      const data = await apiCall(`/api/evening/${currentCode}/players/${playerId}`, "DELETE");
+      if (data.evening) {
+        setEvening(data.evening);
+      } else if (data.error) {
+        alert(data.error);
       }
     };
 
@@ -805,29 +752,24 @@
     function updateEveningUI() {
       if (!currentEvening) {
         eveningInfo.style.display = "none";
-        return;
-      }
-
-      eveningInfo.style.display = "block";
-      document.getElementById("eveningId").textContent = currentEvening.id.substring(0, 8) + "...";
-      document.getElementById("sessionCount").textContent = currentEvening.sessions ? currentEvening.sessions.length : 0;
-    }
-
-    function updateSessionUI() {
-      if (!currentSession) {
-        sessionInfo.style.display = "none";
         playerSection.style.display = "none";
+        eveningStartControls.style.display = "flex";
+        resumeGroup.style.display = "flex";
         return;
       }
 
-      sessionInfo.style.display = "block";
-      document.getElementById("sessionId").textContent = currentSession.id.substring(0, 8) + "...";
-      document.getElementById("playerCount").textContent = currentSession.players ? currentSession.players.length : 0;
-
+      // Abend aktiv: Start-/Fortsetzen-Controls ausblenden
+      eveningStartControls.style.display = "none";
+      resumeGroup.style.display = "none";
+      eveningInfo.style.display = "block";
       playerSection.style.display = "block";
 
+      document.getElementById("eveningCode").textContent = currentEvening.code;
+      const players = currentEvening.players || [];
+      document.getElementById("playerCount").textContent = players.length;
+
       // Player List
-      if (!currentSession.players || currentSession.players.length === 0) {
+      if (players.length === 0) {
         playerList.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">👥</div>
@@ -837,21 +779,21 @@
       } else {
         // Clear existing content
         playerList.innerHTML = "";
-        
+
         // Create player items using safe DOM methods to prevent XSS
-        currentSession.players.forEach(player => {
+        players.forEach(player => {
           const playerItem = document.createElement("div");
           playerItem.className = "player-item";
-          
+
           const playerName = document.createElement("span");
           playerName.className = "player-name";
           playerName.textContent = player.name; // textContent automatically escapes HTML
-          
+
           const removeBtn = document.createElement("button");
           removeBtn.className = "btn-remove";
           removeBtn.textContent = "Entfernen";
           removeBtn.onclick = () => removePlayer(player.id);
-          
+
           playerItem.appendChild(playerName);
           playerItem.appendChild(removeBtn);
           playerList.appendChild(playerItem);
@@ -946,9 +888,12 @@
 
     // Event Listeners
     btnCreateEvening.addEventListener("click", createEvening);
-    if (btnCreateSession) {
-      btnCreateSession.addEventListener("click", createSession);
-    }
+    btnResumeEvening.addEventListener("click", resumeEvening);
+    resumeCodeInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        resumeEvening();
+      }
+    });
     btnAddPlayer.addEventListener("click", addPlayer);
     playerNameInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
@@ -1137,23 +1082,22 @@
     
     // Initialisierung
     async function initializePage() {
-      await loadEvening();
-      
-      // Wenn ein Abend existiert, lade Sessions
-      if (currentEvening && currentEvening.sessions && currentEvening.sessions.length > 0) {
-        // Lade die erste Session (oder aktuelle Session, falls vorhanden)
-        const sessionId = currentEvening.current_session_id || currentEvening.sessions[0];
-        if (sessionId) {
-          const sessionData = await apiCall(`/api/session/${sessionId}`, "GET");
-          if (sessionData.session) {
-            currentSessionId = sessionData.session.id;
-            currentSession = sessionData.session;
-            updateSessionUI();
-          }
-        }
+      updateEveningUI();
+
+      // 1. Code aus der URL (/abend/<code>) hat Vorrang
+      const pathMatch = window.location.pathname.match(/^\/abend\/([A-Za-z0-9]+)$/);
+      if (pathMatch) {
+        const loaded = await loadEvening(pathMatch[1]);
+        if (loaded) return;
+      }
+
+      // 2. Zuletzt genutzten Code als Vorschlag ins Eingabefeld
+      const lastCode = localStorage.getItem(LAST_CODE_KEY);
+      if (lastCode) {
+        resumeCodeInput.value = lastCode;
       }
     }
-    
+
     initializePage();
   </script>
 </body>
