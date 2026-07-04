@@ -1,6 +1,7 @@
 """SQLite-Persistenz für Abende, Spieler und Runden"""
 import os
 import sqlite3
+from contextlib import contextmanager
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evening (
@@ -45,8 +46,11 @@ def get_db_path():
     return os.getenv("DB_PATH", os.path.join("data", "cagemachine.db"))
 
 
+@contextmanager
 def connect():
-    """Öffnet eine neue Verbindung mit Row-Zugriff per Spaltenname"""
+    """Verbindung als Context-Manager: commit bei Erfolg, rollback bei
+    Fehler und in beiden Fällen close (sqlite3's eigener Context-Manager
+    schließt Verbindungen nicht)"""
     path = get_db_path()
     directory = os.path.dirname(path)
     if directory:
@@ -54,7 +58,11 @@ def connect():
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def init_db():

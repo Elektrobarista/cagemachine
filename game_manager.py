@@ -1,5 +1,6 @@
 """Business-Logik für Abend- und Spieler-Management (SQLite-basiert)"""
 import random
+import sqlite3
 import uuid
 from datetime import datetime
 
@@ -39,24 +40,22 @@ class GameManager:
 
     def create_evening(self):
         """Erstellt einen neuen Abend mit eindeutigem Code"""
-        with db.connect() as conn:
-            for _ in range(20):
-                code = _generate_code()
-                exists = conn.execute(
-                    "SELECT 1 FROM evening WHERE code = ?", (code,)
-                ).fetchone()
-                if not exists:
-                    break
-            else:
-                raise RuntimeError("Konnte keinen freien Abend-Code erzeugen")
-
-            evening_id = str(uuid.uuid4())
+        # Insert mit Retry statt check-then-insert: die UNIQUE-Constraint
+        # entscheidet, damit parallele Erstellungen nicht kollidieren
+        for _ in range(20):
+            code = _generate_code()
             now = _now()
-            conn.execute(
-                "INSERT INTO evening (id, code, created_at, last_used_at) VALUES (?, ?, ?, ?)",
-                (evening_id, code, now, now),
-            )
-        return self.get_evening(code)
+            try:
+                with db.connect() as conn:
+                    conn.execute(
+                        "INSERT INTO evening (id, code, created_at, last_used_at)"
+                        " VALUES (?, ?, ?, ?)",
+                        (str(uuid.uuid4()), code, now, now),
+                    )
+                return self.get_evening(code)
+            except sqlite3.IntegrityError:
+                continue
+        raise RuntimeError("Konnte keinen freien Abend-Code erzeugen")
 
     def get_evening(self, code):
         """Lädt einen Abend samt aktiver Spieler; aktualisiert last_used_at"""
@@ -90,15 +89,47 @@ class GameManager:
         if any(p["name"].lower() == name.lower() for p in evening["players"]):
             raise ValueError(f"Spielername '{name}' bereits vorhanden")
 
+        # Wurde schon gelost, wird der Neue hinten angehängt
+        positions = [p["position"] for p in evening["players"] if p["position"]]
+        position = max(positions) + 1 if positions else None
+
         with db.connect() as conn:
             evening_id = conn.execute(
                 "SELECT id FROM evening WHERE code = ?", (evening["code"],)
             ).fetchone()["id"]
             conn.execute(
-                "INSERT INTO player (id, evening_id, name, active, added_at)"
-                " VALUES (?, ?, ?, 1, ?)",
-                (str(uuid.uuid4()), evening_id, name, _now()),
+                "INSERT INTO player (id, evening_id, name, position, active, added_at)"
+                " VALUES (?, ?, ?, ?, 1, ?)",
+                (str(uuid.uuid4()), evening_id, name, position, _now()),
             )
+        return self.get_evening(code)
+
+    def draw_positions(self, code):
+        """Lost die Sitzpositionen der aktiven Spieler aus (1 = Startbecher)"""
+        evening = self.get_evening(code)
+        players = evening["players"]
+        if len(players) < 2:
+            raise ValueError("Zum Auslosen werden mindestens zwei Spieler benötigt")
+
+        with db.connect() as conn:
+            evening_id = conn.execute(
+                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
+            ).fetchone()["id"]
+
+            open_round = conn.execute(
+                "SELECT 1 FROM round WHERE evening_id = ? AND ended_at IS NULL",
+                (evening_id,),
+            ).fetchone()
+            if open_round:
+                raise ValueError("Auslosen ist nicht möglich, solange eine Runde läuft")
+
+            player_ids = [p["id"] for p in players]
+            random.shuffle(player_ids)
+            for position, player_id in enumerate(player_ids, start=1):
+                conn.execute(
+                    "UPDATE player SET position = ? WHERE id = ?",
+                    (position, player_id),
+                )
         return self.get_evening(code)
 
     def deactivate_player(self, code, player_id):
@@ -112,4 +143,16 @@ class GameManager:
                 "UPDATE player SET active = 0, position = NULL WHERE id = ?",
                 (player_id,),
             )
+
+            # Lücke schließen: verbleibende Positionen in bestehender
+            # Reihenfolge auf 1..n verdichten
+            remaining = [
+                p for p in evening["players"]
+                if p["id"] != player_id and p["position"] is not None
+            ]
+            for position, player in enumerate(remaining, start=1):
+                conn.execute(
+                    "UPDATE player SET position = ? WHERE id = ?",
+                    (position, player["id"]),
+                )
         return self.get_evening(code)

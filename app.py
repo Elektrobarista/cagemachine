@@ -48,7 +48,7 @@ def start_at():
     """Tracks audio start at position for statistics (playback is client-side)"""
     try:
         from datetime import datetime
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         position = data.get("position", 0)
         
         # Stelle sicher, dass position eine Zahl ist
@@ -157,13 +157,29 @@ def get_evening(code):
 def add_player(code):
     """Fügt einen Spieler zum Abend hinzu"""
     try:
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         player_name = data.get("name", "").strip()
 
         if not player_name:
             return jsonify({"error": "Spielername darf nicht leer sein"}), 400
+        if len(player_name) > 50:
+            return jsonify({"error": "Spielername darf maximal 50 Zeichen lang sein"}), 400
 
         evening = game_manager.add_player(code, player_name)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<code>/draw", methods=["POST"])
+def draw_positions(code):
+    """Lost die Sitzpositionen aus (1 = Startbecher)"""
+    try:
+        evening = game_manager.draw_positions(code)
         return jsonify({"evening": evening}), 200
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404

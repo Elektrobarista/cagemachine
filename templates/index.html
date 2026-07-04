@@ -176,6 +176,24 @@
       color: #333;
     }
 
+    .player-pos {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-width: 26px;
+      height: 26px;
+      margin-right: 10px;
+      border-radius: 50%;
+      background: #667eea;
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .player-pos.startbecher {
+      background: #f59e0b;
+    }
+
     .btn-remove {
       background: #ef4444;
       color: white;
@@ -373,6 +391,8 @@
           />
           <button class="btn btn-add btn-small" id="btnAddPlayer">Hinzufügen</button>
         </div>
+
+        <button class="btn btn-secondary" id="btnDraw" style="width: 100%; margin-bottom: 12px;">🎲 Positionen auslosen</button>
 
         <div class="player-list" id="playerList">
           <div class="empty-state">
@@ -599,6 +619,7 @@
     const playerSection = document.getElementById("playerSection");
     const playerNameInput = document.getElementById("playerNameInput");
     const btnAddPlayer = document.getElementById("btnAddPlayer");
+    const btnDraw = document.getElementById("btnDraw");
     const playerList = document.getElementById("playerList");
     
     const btnStart = document.getElementById("btnStart");
@@ -738,6 +759,21 @@
       }
     }
 
+    async function drawPositions() {
+      if (!currentCode) return;
+      btnDraw.disabled = true;
+      try {
+        const data = await apiCall(`/api/evening/${currentCode}/draw`, "POST");
+        if (data.evening) {
+          setEvening(data.evening);
+        } else if (data.error) {
+          alert(data.error);
+        }
+      } finally {
+        btnDraw.disabled = false;
+      }
+    }
+
     window.removePlayer = async function(playerId) {
       if (!currentCode) return;
       const data = await apiCall(`/api/evening/${currentCode}/players/${playerId}`, "DELETE");
@@ -753,7 +789,7 @@
       if (!currentEvening) {
         eveningInfo.style.display = "none";
         playerSection.style.display = "none";
-        eveningStartControls.style.display = "flex";
+        eveningStartControls.style.display = "block";
         resumeGroup.style.display = "flex";
         return;
       }
@@ -785,20 +821,35 @@
           const playerItem = document.createElement("div");
           playerItem.className = "player-item";
 
+          const nameWrap = document.createElement("span");
+
+          if (player.position) {
+            const posBadge = document.createElement("span");
+            posBadge.className = "player-pos" + (player.position === 1 ? " startbecher" : "");
+            posBadge.textContent = player.position;
+            posBadge.title = player.position === 1 ? "Startbecher" : `Position ${player.position}`;
+            nameWrap.appendChild(posBadge);
+          }
+
           const playerName = document.createElement("span");
           playerName.className = "player-name";
-          playerName.textContent = player.name; // textContent automatically escapes HTML
+          // textContent automatically escapes HTML
+          playerName.textContent = player.position === 1 ? `${player.name} 🍺` : player.name;
+          nameWrap.appendChild(playerName);
 
           const removeBtn = document.createElement("button");
           removeBtn.className = "btn-remove";
           removeBtn.textContent = "Entfernen";
           removeBtn.onclick = () => removePlayer(player.id);
 
-          playerItem.appendChild(playerName);
+          playerItem.appendChild(nameWrap);
           playerItem.appendChild(removeBtn);
           playerList.appendChild(playerItem);
         });
       }
+
+      // Auslosen erst ab zwei Spielern sinnvoll
+      btnDraw.style.display = players.length >= 2 ? "block" : "none";
     }
 
 
@@ -895,6 +946,7 @@
       }
     });
     btnAddPlayer.addEventListener("click", addPlayer);
+    btnDraw.addEventListener("click", drawPositions);
     playerNameInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         addPlayer();
