@@ -469,33 +469,44 @@
     // API-Endpunkte
     const API_BASE = "";
     
-        // Web-Audio basierter     // Web-Audio basierter Client-Side Audio Controller für eine Datei mit Intro+Loop
+    // Web-Audio basierter Client-Side Audio Controller.
+    // Audio-Datei und Loop-Punkte kommen aus der Modus-Definition (applyConfig).
     class ClientAudioController {
-      constructor(audioPath) {
-        // Timecodes in Sekunden (Cage-Loop-concat.ogg)
-        this.introEnd = 337.806;   // 5:37.806
-        this.loopStart = 337.806;  // Loop beginnt hier
-        this.loopEnd = 475.299;    // 7:55.299
+      constructor(audioConfig) {
         this.crossfade = 0.02; // 20ms Crossfade
 
-        this.audioPath = audioPath;
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.gain = this.ctx.createGain();
         this.gain.connect(this.ctx.destination);
 
+        this.buffers = {};  // Datei-URL -> dekodierter AudioBuffer
         this.buffer = null;
         this.state = "stopped"; // stopped, intro, looping, paused
         this.startTime = null;
         this.positionOffset = 0;
         this.source = null;
         this.pendingPosition = null;
+
+        this.applyConfig(audioConfig);
+      }
+
+      // Nur im gestoppten Zustand aufrufen (Modus-Wechsel ist im UI gesperrt,
+      // solange Musik läuft)
+      applyConfig(config) {
+        this.audioPath = config.file;
+        this.introEnd = config.intro_end;
+        this.loopStart = config.loop_start;
+        this.loopEnd = config.loop_end;
+        this.buffer = this.buffers[this.audioPath] || null;
       }
 
       async loadIfNeeded() {
-        if (this.buffer) return;
-        const resp = await fetch(this.audioPath);
-        const arr = await resp.arrayBuffer();
-        this.buffer = await this.ctx.decodeAudioData(arr);
+        if (!this.buffers[this.audioPath]) {
+          const resp = await fetch(this.audioPath);
+          const arr = await resp.arrayBuffer();
+          this.buffers[this.audioPath] = await this.ctx.decodeAudioData(arr);
+        }
+        this.buffer = this.buffers[this.audioPath];
       }
 
       stopSource() {
@@ -594,6 +605,7 @@
 
       pause() {
         if (this.state === "stopped") return;
+        this.stateBeforePause = this.state;
         this.ctx.suspend();
         this.state = "paused";
       }
@@ -601,7 +613,7 @@
       async resume() {
         if (this.state !== "paused") return;
         await this.ctx.resume();
-        this.state = "looping";
+        this.state = this.stateBeforePause || "looping";
       }
 
       stop() {
@@ -665,9 +677,14 @@
     const timeDisplay = document.getElementById("timeDisplay");
 
     // Initialize client audio controller when DOM is ready
-    const introPath = "/static/RageCage_Intro.ogg";
-    const loopPath = "/static/RageCage_Gas.ogg";
-    clientAudio = new ClientAudioController("/static/Cage-Loop-concat.ogg");
+    // Fallback, bis /api/modes geladen ist (identisch zur classic-Definition)
+    const DEFAULT_AUDIO_CONFIG = {
+      file: "/static/Cage-Loop-concat.ogg",
+      intro_end: 337.806,
+      loop_start: 337.806,
+      loop_end: 475.299
+    };
+    clientAudio = new ClientAudioController(DEFAULT_AUDIO_CONFIG);
 
     // State
     let currentEvening = null;   // {code, created_at, players}
@@ -970,6 +987,7 @@
         const btn = document.createElement("button");
         btn.className = "mode-btn" + (mode.id === selectedMode ? " selected" : "");
         btn.textContent = mode.label;
+        btn.title = mode.description || "";
         btn.dataset.modeId = mode.id;
         btn.onclick = () => {
           selectedMode = mode.id;
@@ -994,17 +1012,43 @@
       }
     }
 
+    // Zeitlimit: zählt nur, während Musik läuft (Pause hält das Limit an)
+    const roundTimer = { limit: null, elapsed: 0 };
+    setInterval(() => {
+      if (roundTimer.limit === null) return;
+      if (currentStatus === "intro" || currentStatus === "looping") {
+        roundTimer.elapsed += 0.5;
+        if (roundTimer.elapsed >= roundTimer.limit) {
+          roundTimer.limit = null;
+          btnStop.click(); // stoppt Musik und beendet die Runde
+        }
+      }
+    }, 500);
+
     btnStart.addEventListener("click", async () => {
       const wasPaused = clientAudio.state === "paused";
       if (wasPaused) {
         clientAudio.resume();
       } else {
         const mode = gameModes.find(m => m.id === selectedMode);
-        if (mode && mode.start_position > 0) {
-          await clientAudio.startAtPosition(mode.start_position);
-        } else {
-          clientAudio.start();
+        if (mode && mode.audio) {
+          clientAudio.applyConfig(mode.audio);
         }
+        try {
+          if (mode && mode.start_position > 0) {
+            await clientAudio.startAtPosition(mode.start_position);
+          } else {
+            await clientAudio.start();
+          }
+        } catch (e) {
+          console.error("Audio-Start fehlgeschlagen:", e);
+          alert("Audio konnte nicht geladen werden. Prüfe die Audio-Datei des Modus.");
+          clientAudio.stop();
+          updateStatus();
+          return; // keine Runde ohne Musik
+        }
+        roundTimer.limit = (mode && mode.time_limit) || null;
+        roundTimer.elapsed = 0;
       }
       updateStatus();
 
@@ -1025,16 +1069,26 @@
     });
 
     btnStop.addEventListener("click", async () => {
+      roundTimer.limit = null;
       clientAudio.stop();
       updateStatus();
       await trackRound("end");
     });
 
     const headstartPlay = async (seconds) => {
-      // Debug-Funktion: springt nur in der Audio-Datei, startet KEINE Runde
+      // Debug-Funktion: springt nur in der Audio-Datei, startet KEINE Runde.
+      // Die Sprungziele beziehen sich auf die Standard-Datei, daher immer
+      // deren Config anwenden (unabhängig vom gewählten Modus).
+      clientAudio.applyConfig(DEFAULT_AUDIO_CONFIG);
       currentPosition = seconds;
       timeDisplay.textContent = formatTime(currentPosition);
-      await clientAudio.startAtPosition(seconds);
+      try {
+        await clientAudio.startAtPosition(seconds);
+      } catch (e) {
+        console.error("Audio-Start fehlgeschlagen:", e);
+        alert("Audio konnte nicht geladen werden.");
+        clientAudio.stop();
+      }
       updateStatus();
       updatePosition();
     };

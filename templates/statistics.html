@@ -225,11 +225,14 @@
       });
     }
 
-    const MODE_LABELS = {
-      "classic": "Classic",
-      "headstart_165": "Headstart 2:45",
-      "headstart_465": "Headstart 7:45"
-    };
+    // Modus-Labels vom Server (einzige Definitionsstelle: game_manager.py)
+    let modeLabels = {};
+    async function loadModeLabels() {
+      const data = await apiCall("/api/modes", "GET");
+      if (data.modes) {
+        data.modes.forEach(m => { modeLabels[m.id] = m.label; });
+      }
+    }
 
     async function loadStatistics() {
       if (!eveningCode) {
@@ -305,7 +308,7 @@
           const running = r.ended_at === null;
           html += `<tr>
             <td>${formatDateTime(r.started_at)}</td>
-            <td>${esc(MODE_LABELS[r.mode] || r.mode)}</td>
+            <td>${esc(modeLabels[r.mode] || r.mode)}</td>
             <td>${running ? "<span style='color:#10b981;font-weight:600;'>läuft …</span>" : r.duration_formatted}</td>
             <td>${r.player_count}</td>
           </tr>`;
@@ -325,7 +328,7 @@
     }
 
     // Load statistics on page load
-    loadStatistics();
+    loadModeLabels().then(loadStatistics);
     checkCurrentEvening();
 
     // Auto-refresh every 30 seconds

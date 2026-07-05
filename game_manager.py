@@ -10,11 +10,42 @@ import db
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 4
 
-# Spielmodi: start_position = Einstiegspunkt in der Audio-Datei (Sekunden)
+# Standard-Audio: eine Datei mit Intro + Loop, Timecodes in Sekunden
+DEFAULT_AUDIO = {
+    "file": "/static/Cage-Loop-concat.ogg",
+    "intro_end": 337.806,   # 5:37.806 – hier endet das Intro
+    "loop_start": 337.806,  # Loop-Segment ...
+    "loop_end": 475.299,    # ... bis 7:55.299
+}
+
+# Spielmodi – ein neuer Modus ist ein Eintrag hier:
+#   label          Anzeige im UI
+#   description    Tooltip/Erklärung im UI
+#   start_position Einstiegspunkt in der Audio-Datei (Sekunden, 0 = von vorn)
+#   time_limit     Runde endet automatisch nach X Sekunden (None = kein Limit)
+#   audio          Audio-Datei mit Loop-Punkten (eigene Datei pro Modus möglich)
 GAME_MODES = {
-    "classic": {"label": "Classic", "start_position": 0},
-    "headstart_165": {"label": "Headstart 2:45", "start_position": 165},
-    "headstart_465": {"label": "Headstart 7:45", "start_position": 465},
+    "classic": {
+        "label": "Classic",
+        "description": "Intro + Endlos-Loop von vorn",
+        "start_position": 0,
+        "time_limit": None,
+        "audio": DEFAULT_AUDIO,
+    },
+    "headstart_165": {
+        "label": "Headstart 2:45",
+        "description": "Einstieg bei 2:45 – verkürztes Intro",
+        "start_position": 165,
+        "time_limit": None,
+        "audio": DEFAULT_AUDIO,
+    },
+    "headstart_465": {
+        "label": "Headstart 7:45",
+        "description": "Einstieg bei 7:45 – direkt im Loop",
+        "start_position": 465,
+        "time_limit": None,
+        "audio": DEFAULT_AUDIO,
+    },
 }
 
 # Länger kann eine echte Runde nicht dauern; verwaiste Runden (Browser

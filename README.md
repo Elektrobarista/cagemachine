@@ -26,7 +26,7 @@ Die Wiedergabe nutzt eine einzige zusammengeschnittene Datei:
 
 - `static/Cage-Loop-concat.ogg` - Intro + Loop in einer Datei
 
-Die Loop-Punkte (`loopStart`/`loopEnd`) sind in `templates/index.html` fest auf diese Datei abgestimmt. Wird die Datei ausgetauscht, müssen die Timecodes dort angepasst werden.
+Die Loop-Punkte sind in `game_manager.py` (`DEFAULT_AUDIO`) auf diese Datei abgestimmt. Wird die Datei ausgetauscht, müssen die Timecodes dort angepasst werden.
 
 ## Verwendung
 
@@ -110,8 +110,18 @@ Runden (> 2 h) fließen nicht in die Zeitstatistik ein.
 ### Spielmodi
 
 Die Modi sind zentral in `game_manager.py` (`GAME_MODES`) definiert – ein neuer Modus
-ist ein Dict-Eintrag (Label + Startposition in der Audio-Datei), das UI rendert die
-Auswahl dynamisch über `/api/modes`.
+ist ein Dict-Eintrag, das UI rendert die Auswahl dynamisch über `/api/modes`. Pro Modus
+konfigurierbar:
+
+- `label` / `description` - Anzeige und Tooltip im UI
+- `start_position` - Einstiegspunkt in der Audio-Datei (Sekunden, 0 = von vorn)
+- `time_limit` - Runde endet automatisch nach X Sekunden (`None` = kein Limit;
+  Pause hält das Limit an)
+- `audio` - Audio-Datei mit `intro_end`/`loop_start`/`loop_end` (eigene Datei pro
+  Modus möglich; `DEFAULT_AUDIO` nutzt `Cage-Loop-concat.ogg`)
+
+Die Loop-Punkte kommen damit aus der Modus-Definition, nicht mehr hartkodiert aus dem
+Frontend.
 
 ## Fehlerbehebung
 

@@ -96,10 +96,18 @@ def test_modes():
     r = requests.get(f"{BASE_URL}/api/modes")
     assert r.status_code == 200
     modes = {m["id"]: m for m in r.json()["modes"]}
-    assert set(modes) == {"classic", "headstart_165", "headstart_465"}
+    assert {"classic", "headstart_165", "headstart_465"} <= set(modes)
     assert modes["classic"]["start_position"] == 0
     assert modes["headstart_165"]["start_position"] == 165
-    assert all("label" in m for m in modes.values())
+
+    # Jeder Modus braucht die volle Definition
+    for m in modes.values():
+        assert "label" in m and "description" in m
+        assert "time_limit" in m  # None erlaubt
+        audio = m["audio"]
+        assert audio["file"].startswith("/static/")
+        assert audio["loop_start"] < audio["loop_end"]
+        assert 0 <= m["start_position"] < audio["loop_end"]
     print(f"  ✓ {len(modes)} Modi: {', '.join(m['label'] for m in modes.values())}")
 
 
