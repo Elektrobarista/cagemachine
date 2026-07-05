@@ -26,22 +26,3 @@ def format_duration(seconds):
         return f"{minutes:02d}:{secs:02d}"
 
 
-def calculate_duration(started_at, ended_at):
-    """
-    Berechnet die Dauer zwischen zwei Zeitpunkten in Sekunden
-    
-    Args:
-        started_at: Start-Zeitpunkt (datetime)
-        ended_at: End-Zeitpunkt (datetime)
-    
-    Returns:
-        float: Dauer in Sekunden
-    """
-    if started_at is None or ended_at is None:
-        return 0.0
-    
-    delta = ended_at - started_at
-    return delta.total_seconds()
-
-
-

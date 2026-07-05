@@ -646,15 +646,6 @@
     let currentPosition = 0;
     let totalDuration = 0;
 
-    // Status-Text Mapping
-    const statusTexts = {
-      "stopped": "bereit",
-      "intro": "Intro läuft …",
-      "looping": "Loop läuft (Endlosschleife) …",
-      "paused": "pausiert",
-      "error": "Fehler"
-    };
-
     // API-Call Helper
     async function apiCall(endpoint, method = "POST", body = null) {
       try {
@@ -861,52 +852,22 @@
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
     
-    async function updatePosition() {
-      if (clientAudio) {
-        currentPosition = clientAudio.getPosition();
-        totalDuration = clientAudio.getDuration();
-        timeDisplay.textContent = formatTime(currentPosition);
-      } else {
-        // Fallback to server API
-        const data = await apiCall("/api/position", "GET");
-        if (data.position !== undefined) {
-          currentPosition = data.position;
-          // Nur duration setzen, wenn sie auch definiert ist
-          if (data.duration !== undefined) {
-            totalDuration = data.duration;
-          }
-          timeDisplay.textContent = formatTime(currentPosition);
-        }
-      }
+    function updatePosition() {
+      currentPosition = clientAudio.getPosition();
+      totalDuration = clientAudio.getDuration();
+      timeDisplay.textContent = formatTime(currentPosition);
     }
 
-    async function updateStatus() {
-      if (clientAudio) {
-        const status = clientAudio.getStatus();
-        currentStatus = status.status;
-        const statusText = status.message;
-        statusEl.textContent = `Status: ${statusText}`;
-        if (currentStatus === "intro" || currentStatus === "looping") {
-          statusEl.classList.add("active");
-        } else {
-          statusEl.classList.remove("active");
-        }
-        updateButtonStates();
+    function updateStatus() {
+      const status = clientAudio.getStatus();
+      currentStatus = status.status;
+      statusEl.textContent = `Status: ${status.message}`;
+      if (currentStatus === "intro" || currentStatus === "looping") {
+        statusEl.classList.add("active");
       } else {
-        // Fallback to server API
-        const data = await apiCall("/api/status", "GET");
-        if (data.status) {
-          currentStatus = data.status;
-          const statusText = data.message || statusTexts[data.status] || data.status;
-          statusEl.textContent = `Status: ${statusText}`;
-          if (currentStatus === "intro" || currentStatus === "looping") {
-            statusEl.classList.add("active");
-          } else {
-            statusEl.classList.remove("active");
-          }
-          updateButtonStates();
-        }
+        statusEl.classList.remove("active");
       }
+      updateButtonStates();
     }
 
     function updateButtonStates() {
@@ -953,130 +914,58 @@
       }
     });
 
+    // Meldet Rundenstart/-ende an den Server (nur wenn ein Abend geladen ist)
+    async function trackRound(action) {
+      if (!currentCode) return;
+      try {
+        const data = await apiCall(`/api/evening/${currentCode}/round/${action}`, "POST",
+          action === "start" ? { mode: "classic" } : null);
+        if (data.evening) {
+          setEvening(data.evening);
+        }
+      } catch (e) {
+        console.error("Runden-Tracking fehlgeschlagen:", e);
+      }
+    }
+
     btnStart.addEventListener("click", async () => {
-      if (clientAudio) {
-        if (clientAudio.state === "paused") {
-          clientAudio.resume();
-        } else {
-          clientAudio.start();
-        }
-        const status = clientAudio.getStatus();
-        currentStatus = status.status;
-        statusEl.textContent = `Status: ${status.message}`;
-        updateButtonStates();
-        
-        // Optionally sync with server for statistics
-        try {
-          await apiCall("/api/start");
-        } catch (e) {
-          console.error("Failed to sync with server:", e);
-        }
+      const wasPaused = clientAudio.state === "paused";
+      if (wasPaused) {
+        clientAudio.resume();
       } else {
-        // Fallback to server API
-        if (currentStatus === "paused") {
-          const data = await apiCall("/api/resume");
-          if (data.status) {
-            currentStatus = data.status;
-            statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-            updateButtonStates();
-          }
-        } else {
-          const data = await apiCall("/api/start");
-          if (data.status) {
-            currentStatus = data.status;
-            statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-            updateButtonStates();
-          }
-        }
+        clientAudio.start();
+      }
+      updateStatus();
+
+      // Nur ein echter Start ist eine neue Runde, Resume nicht
+      if (!wasPaused) {
+        await trackRound("start");
       }
     });
 
-    btnPause.addEventListener("click", async () => {
-      if (clientAudio) {
-        if (clientAudio.state === "paused") {
-          clientAudio.resume();
-        } else {
-          clientAudio.pause();
-        }
-        const status = clientAudio.getStatus();
-        currentStatus = status.status;
-        statusEl.textContent = `Status: ${status.message}`;
-        updateButtonStates();
-        
-        // Optionally sync with server
-        try {
-          await apiCall("/api/pause");
-        } catch (e) {
-          console.error("Failed to sync with server:", e);
-        }
+    btnPause.addEventListener("click", () => {
+      if (clientAudio.state === "paused") {
+        clientAudio.resume();
       } else {
-        // Fallback to server API
-        if (currentStatus === "paused") {
-          btnStart.click();
-        } else {
-          const data = await apiCall("/api/pause");
-          if (data.status) {
-            currentStatus = data.status;
-            statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-            updateButtonStates();
-          }
-        }
+        clientAudio.pause();
       }
+      // Pause/Resume läuft rein clientseitig, die Runde läuft weiter
+      updateStatus();
     });
 
     btnStop.addEventListener("click", async () => {
-      if (clientAudio) {
-        clientAudio.stop();
-        const status = clientAudio.getStatus();
-        currentStatus = status.status;
-        statusEl.textContent = `Status: ${status.message}`;
-        updateButtonStates();
-        
-        // Optionally sync with server
-        try {
-          await apiCall("/api/stop");
-        } catch (e) {
-          console.error("Failed to sync with server:", e);
-        }
-      } else {
-        // Fallback to server API
-        const data = await apiCall("/api/stop");
-        if (data.status) {
-          currentStatus = data.status;
-          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-          updateButtonStates();
-        }
-      }
+      clientAudio.stop();
+      updateStatus();
+      await trackRound("end");
     });
 
     const headstartPlay = async (seconds) => {
-      if (clientAudio) {
-        // Sofort Anzeige setzen
-        currentPosition = seconds;
-        timeDisplay.textContent = formatTime(currentPosition);
-        await clientAudio.startAtPosition(seconds);
-        const status = clientAudio.getStatus();
-        currentStatus = status.status;
-        currentPosition = clientAudio.getPosition();
-        totalDuration = clientAudio.getDuration();
-        statusEl.textContent = `Status: ${status.message}`;
-        timeDisplay.textContent = formatTime(currentPosition);
-        updateButtonStates();
-        try {
-          await apiCall("/api/start_at", "POST", { position: seconds });
-        } catch (e) {
-          console.error("Failed to sync with server:", e);
-        }
-      } else {
-        const data = await apiCall("/api/start_at", "POST", { position: seconds });
-        if (data.status) {
-          currentStatus = data.status;
-          statusEl.textContent = `Status: ${data.message || statusTexts[data.status]}`;
-          updateButtonStates();
-        } else if (data.error) {
-          alert(data.error);
-        }
-      }
+      // Debug-Funktion: springt nur in der Audio-Datei, startet KEINE Runde
+      currentPosition = seconds;
+      timeDisplay.textContent = formatTime(currentPosition);
+      await clientAudio.startAtPosition(seconds);
+      updateStatus();
+      updatePosition();
     };
 
     btnHeadstart.addEventListener("click", async () => {

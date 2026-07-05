@@ -1,276 +1,112 @@
 #!/usr/bin/env python3
 """
-Test-Suite für die Cagemachine Audio-App
-Testet alle API-Endpoints und State-Transitions
+Test-Suite für die Cagemachine API
+Testet Abend-, Spieler-, Auslosungs- und Runden-Endpoints
+(Server muss laufen, BASE_URL ggf. anpassen)
 """
-import requests
+import os
 import time
-import json
 
-BASE_URL = "http://127.0.0.1:8000"
+import requests
 
-def test_status():
-    """Test 1: Status-Endpoint"""
-    print("\n[TEST 1] Status-Endpoint testen...")
-    try:
-        response = requests.get(f"{BASE_URL}/api/status")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, f"Erwartet 200, bekam {response.status_code}"
-        assert "status" in response.json(), "Response sollte 'status' enthalten"
-        print("  ✓ Status-Endpoint funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:3000")
 
-def test_start():
-    """Test 2: Start-Endpoint"""
-    print("\n[TEST 2] Start-Endpoint testen...")
-    try:
-        response = requests.post(f"{BASE_URL}/api/start")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, f"Erwartet 200, bekam {response.status_code}"
-        data = response.json()
-        assert data["status"] in ["intro", "looping"], f"Status sollte 'intro' oder 'looping' sein, bekam: {data['status']}"
-        print("  ✓ Start-Endpoint funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
 
-def test_status_after_start():
-    """Test 3: Status nach Start prüfen"""
-    print("\n[TEST 3] Status nach Start prüfen...")
-    try:
-        time.sleep(0.5)  # Kurz warten
-        response = requests.get(f"{BASE_URL}/api/status")
-        data = response.json()
-        print(f"  Status: {data['status']}")
-        print(f"  Message: {data['message']}")
-        assert data["status"] in ["intro", "looping"], "Status sollte 'intro' oder 'looping' sein"
-        print("  ✓ Status nach Start korrekt")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+def test_create_evening():
+    print("\n[TEST 1] Abend anlegen...")
+    r = requests.post(f"{BASE_URL}/api/evening")
+    assert r.status_code == 200, f"Erwartet 200, bekam {r.status_code}"
+    evening = r.json()["evening"]
+    assert len(evening["code"]) == 4, "Code sollte 4 Zeichen haben"
+    assert evening["players"] == []
+    assert evening["open_round"] is None
+    print(f"  ✓ Abend {evening['code']} angelegt")
+    return evening["code"]
 
-def test_pause():
-    """Test 4: Pause-Endpoint"""
-    print("\n[TEST 4] Pause-Endpoint testen...")
-    try:
-        response = requests.post(f"{BASE_URL}/api/pause")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, f"Erwartet 200, bekam {response.status_code}"
-        data = response.json()
-        assert data["status"] == "paused", f"Status sollte 'paused' sein, bekam: {data['status']}"
-        print("  ✓ Pause-Endpoint funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
 
-def test_resume():
-    """Test 5: Resume-Endpoint"""
-    print("\n[TEST 5] Resume-Endpoint testen...")
-    try:
-        response = requests.post(f"{BASE_URL}/api/resume")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, f"Erwartet 200, bekam {response.status_code}"
-        data = response.json()
-        assert data["status"] in ["intro", "looping"], f"Status sollte 'intro' oder 'looping' sein, bekam: {data['status']}"
-        print("  ✓ Resume-Endpoint funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+def test_resume_evening(code):
+    print("\n[TEST 2] Abend per Code laden (auch kleingeschrieben)...")
+    r = requests.get(f"{BASE_URL}/api/evening/{code.lower()}")
+    assert r.status_code == 200
+    assert r.json()["evening"]["code"] == code
+    r = requests.get(f"{BASE_URL}/api/evening/XXXX")
+    assert r.status_code == 404, "Unbekannter Code sollte 404 liefern"
+    print("  ✓ Wiederaufnahme funktioniert, unbekannter Code -> 404")
 
-def test_stop():
-    """Test 6: Stop-Endpoint"""
-    print("\n[TEST 6] Stop-Endpoint testen...")
-    try:
-        response = requests.post(f"{BASE_URL}/api/stop")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, f"Erwartet 200, bekam {response.status_code}"
-        data = response.json()
-        assert data["status"] in ["stopping", "stopped"], f"Status sollte 'stopping' oder 'stopped' sein, bekam: {data['status']}"
-        print("  ✓ Stop-Endpoint funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
 
-def test_stop_after_stop():
-    """Test 7: Stop nach bereits gestoppt (Edge Case)"""
-    print("\n[TEST 7] Stop nach bereits gestoppt (Edge Case)...")
-    try:
-        time.sleep(2.5)  # Warte auf Fade-Out
-        response = requests.post(f"{BASE_URL}/api/stop")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, "Sollte auch bei bereits gestoppt 200 zurückgeben"
-        print("  ✓ Stop nach bereits gestoppt funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+def test_players(code):
+    print("\n[TEST 3] Spieler verwalten...")
+    for name in ["Anna", "Ben", "Chris"]:
+        r = requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+        assert r.status_code == 200, f"{name}: {r.status_code}"
 
-def test_start_after_stop():
-    """Test 8: Start nach Stop (Neustart)"""
-    print("\n[TEST 8] Start nach Stop (Neustart)...")
-    try:
-        response = requests.post(f"{BASE_URL}/api/start")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        assert response.status_code == 200, f"Erwartet 200, bekam {response.status_code}"
-        data = response.json()
-        assert data["status"] in ["intro", "looping"], f"Status sollte 'intro' oder 'looping' sein, bekam: {data['status']}"
-        print("  ✓ Neustart funktioniert")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": "anna"})
+    assert r.status_code == 400, "Duplikat-Name sollte 400 liefern"
 
-def test_multiple_starts():
-    """Test 9: Mehrfaches Start (sollte idempotent sein)"""
-    print("\n[TEST 9] Mehrfaches Start (idempotent)...")
-    try:
-        response1 = requests.post(f"{BASE_URL}/api/start")
-        time.sleep(0.2)
-        response2 = requests.post(f"{BASE_URL}/api/start")
-        print(f"  Erster Start: {response1.json()}")
-        print(f"  Zweiter Start: {response2.json()}")
-        assert response1.status_code == 200
-        assert response2.status_code == 200
-        print("  ✓ Mehrfaches Start funktioniert (idempotent)")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": "X" * 60})
+    assert r.status_code == 400, "Überlanger Name sollte 400 liefern"
 
-def test_resume_without_pause():
-    """Test 10: Resume ohne vorheriges Pause (Edge Case)"""
-    print("\n[TEST 10] Resume ohne vorheriges Pause (Edge Case)...")
-    try:
-        # Stoppe erst, dann versuche Resume
-        requests.post(f"{BASE_URL}/api/stop")
-        time.sleep(2.5)
-        response = requests.post(f"{BASE_URL}/api/resume")
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Response: {response.json()}")
-        # Resume ohne Pause sollte entweder 200 zurückgeben oder den Status nicht ändern
-        assert response.status_code == 200
-        print("  ✓ Resume ohne Pause behandelt")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
+    players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    assert [p["name"] for p in players] == ["Anna", "Ben", "Chris"]
+    print("  ✓ Hinzufügen, Duplikat- und Längen-Check")
+    return players
 
-def test_full_workflow():
-    """Test 11: Vollständiger Workflow"""
-    print("\n[TEST 11] Vollständiger Workflow (Start → Pause → Resume → Stop)...")
-    try:
-        # Start
-        r1 = requests.post(f"{BASE_URL}/api/start")
-        assert r1.status_code == 200
-        time.sleep(1)
-        
-        # Pause
-        r2 = requests.post(f"{BASE_URL}/api/pause")
-        assert r2.status_code == 200
-        assert r2.json()["status"] == "paused"
-        time.sleep(0.5)
-        
-        # Resume
-        r3 = requests.post(f"{BASE_URL}/api/resume")
-        assert r3.status_code == 200
-        assert r3.json()["status"] in ["intro", "looping"]
-        time.sleep(1)
-        
-        # Stop
-        r4 = requests.post(f"{BASE_URL}/api/stop")
-        assert r4.status_code == 200
-        assert r4.json()["status"] in ["stopping", "stopped"]
-        time.sleep(2.5)
-        
-        # Finaler Status
-        r5 = requests.get(f"{BASE_URL}/api/status")
-        assert r5.status_code == 200
-        assert r5.json()["status"] == "stopped"
-        
-        print("  ✓ Vollständiger Workflow erfolgreich")
-        return True
-    except Exception as e:
-        print(f"  ✗ Fehler: {e}")
-        return False
 
-def main():
-    """Hauptfunktion - führt alle Tests aus"""
-    print("=" * 60)
-    print("CAGEMACHINE AUDIO-APP TEST SUITE")
-    print("=" * 60)
-    
-    # Prüfe ob Server läuft
-    try:
-        response = requests.get(f"{BASE_URL}/api/status", timeout=5)
-        print("✓ Server ist erreichbar")
-    except requests.exceptions.ConnectionError as e:
-        print(f"✗ FEHLER: Server läuft nicht! Bitte starte die App mit: python app.py")
-        print(f"  Details: {e}")
-        return
-    except Exception as e:
-        print(f"✗ FEHLER: {e}")
-        import traceback
-        traceback.print_exc()
-        return
-    
-    tests = [
-        test_status,
-        test_start,
-        test_status_after_start,
-        test_pause,
-        test_resume,
-        test_stop,
-        test_stop_after_stop,
-        test_start_after_stop,
-        test_multiple_starts,
-        test_resume_without_pause,
-        test_full_workflow,
-    ]
-    
-    results = []
-    for test in tests:
-        try:
-            result = test()
-            results.append(result)
-        except KeyboardInterrupt:
-            print("\n\nTests abgebrochen durch Benutzer")
-            break
-        except Exception as e:
-            print(f"\n  ✗ Unerwarteter Fehler in {test.__name__}: {e}")
-            results.append(False)
-    
-    # Zusammenfassung
-    print("\n" + "=" * 60)
-    print("TEST ZUSAMMENFASSUNG")
-    print("=" * 60)
-    passed = sum(results)
-    total = len(results)
-    print(f"Erfolgreich: {passed}/{total}")
-    print(f"Fehlgeschlagen: {total - passed}/{total}")
-    
-    if passed == total:
-        print("\n✓ ALLE TESTS ERFOLGREICH!")
-    else:
-        print(f"\n✗ {total - passed} TEST(S) FEHLGESCHLAGEN")
-    
-    return passed == total
+def test_draw(code):
+    print("\n[TEST 4] Positionen auslosen...")
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/draw")
+    assert r.status_code == 200
+    players = r.json()["evening"]["players"]
+    assert sorted(p["position"] for p in players) == [1, 2, 3]
+    print(f"  ✓ Auslosung: {[(p['position'], p['name']) for p in players]}")
+
+
+def test_remove_player_compaction(code):
+    print("\n[TEST 5] Spieler entfernen schließt Positionslücke...")
+    players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    victim = next(p for p in players if p["position"] == 2)
+    r = requests.delete(f"{BASE_URL}/api/evening/{code}/players/{victim['id']}")
+    assert r.status_code == 200
+    remaining = r.json()["evening"]["players"]
+    assert [p["position"] for p in remaining] == [1, 2], "Positionen sollten verdichtet sein"
+    print("  ✓ Positionen lückenlos verdichtet")
+
+
+def test_rounds(code):
+    print("\n[TEST 6] Runde starten und beenden...")
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    assert r.status_code == 200
+    assert r.json()["evening"]["open_round"] is not None, "Runde sollte offen sein"
+
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/draw")
+    assert r.status_code == 400, "Auslosen während laufender Runde sollte 400 liefern"
+
+    time.sleep(1)
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+    assert r.status_code == 200
+    assert r.json()["evening"]["open_round"] is None, "Runde sollte geschlossen sein"
+
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "gibtsnicht"})
+    assert r.status_code == 400, "Unbekannter Modus sollte 400 liefern"
+    print("  ✓ Runde offen/geschlossen, Draw-Sperre, Modus-Validierung")
+
+
+def test_statistics():
+    print("\n[TEST 7] Statistik...")
+    r = requests.get(f"{BASE_URL}/api/statistics/audio")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_starts"] >= 1
+    assert len(data["completed_events"]) >= 1
+    print(f"  ✓ {data['total_starts']} Runde(n), Gesamtdauer {data['total_duration_formatted']}")
+
 
 if __name__ == "__main__":
-    success = main()
-    exit(0 if success else 1)
-
+    code = test_create_evening()
+    test_resume_evening(code)
+    test_players(code)
+    test_draw(code)
+    test_remove_player_compaction(code)
+    test_rounds(code)
+    test_statistics()
+    print("\nAlle Tests bestanden ✓")

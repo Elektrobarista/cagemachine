@@ -7,9 +7,6 @@ app = Flask(__name__)
 # GameManager-Instanz erstellen (initialisiert die SQLite-DB)
 game_manager = GameManager()
 
-# Audio-Events für Statistiken tracken
-audio_events = []  # Liste von {"started_at": datetime, "ended_at": datetime, "duration": float}
-
 
 @app.route("/")
 def index():
@@ -27,107 +24,6 @@ def evening_page(code):
 def statistics():
     """Statistik-Seite rendern"""
     return render_template("statistics.html")
-
-
-# Audio-API-Endpunkte (stats-only, playback is client-side)
-@app.route("/api/start", methods=["POST"])
-def start():
-    """Tracks audio start for statistics (playback is client-side)"""
-    try:
-        from datetime import datetime
-        # Track Audio-Start für Statistiken
-        audio_events.append({"started_at": datetime.now(), "ended_at": None, "duration": None})
-        # Return status as if audio started (client handles actual playback)
-        return jsonify({"status": "intro", "message": "Intro läuft …"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
-
-
-@app.route("/api/start_at", methods=["POST"])
-def start_at():
-    """Tracks audio start at position for statistics (playback is client-side)"""
-    try:
-        from datetime import datetime
-        data = request.get_json(silent=True) or {}
-        position = data.get("position", 0)
-        
-        # Stelle sicher, dass position eine Zahl ist
-        try:
-            position = float(position)
-        except (ValueError, TypeError):
-            return jsonify({"status": "error", "message": "Ungültige Position"}), 400
-        
-        # Track Audio-Start für Statistiken
-        audio_events.append({"started_at": datetime.now(), "ended_at": None, "duration": None})
-        # Return status as if audio started (client handles actual playback)
-        return jsonify({"status": "intro", "message": "Intro läuft …"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
-
-
-@app.route("/api/pause", methods=["POST"])
-def pause():
-    """Tracks audio pause (playback is client-side)"""
-    try:
-        # Return status as if audio paused (client handles actual playback)
-        return jsonify({"status": "paused", "message": "pausiert"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
-
-
-@app.route("/api/resume", methods=["POST"])
-def resume():
-    """Tracks audio resume (playback is client-side)"""
-    try:
-        # Return status as if audio resumed (client handles actual playback)
-        return jsonify({"status": "intro", "message": "Intro läuft …"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
-
-
-@app.route("/api/stop", methods=["POST"])
-def stop():
-    """Tracks audio stop for statistics (playback is client-side)"""
-    try:
-        from datetime import datetime
-        from utils import calculate_duration
-        # Track Audio-Ende für Statistiken
-        if audio_events:
-            last_event = audio_events[-1]
-            if last_event["ended_at"] is None:
-                last_event["ended_at"] = datetime.now()
-                if last_event["started_at"]:
-                    last_event["duration"] = calculate_duration(last_event["started_at"], last_event["ended_at"])
-        # Return status as if audio stopped (client handles actual playback)
-        return jsonify({"status": "stopped", "message": "bereit"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
-
-
-@app.route("/api/status", methods=["GET"])
-def status():
-    """Returns default status (client handles actual playback)"""
-    try:
-        # Return default stopped status (client manages actual state)
-        return jsonify({"status": "stopped", "message": "bereit"}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
-
-
-@app.route("/api/position", methods=["GET"])
-def position():
-    """Returns default position (client handles actual playback)"""
-    try:
-        # Return default values (client manages actual position)
-        return jsonify({
-            "position": 0,
-            "duration": None,
-            "intro_duration": None,
-            "loop_duration": None,
-            "is_looping": False
-        }), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Fehler: {str(e)}"}), 500
 
 
 # Evening-API-Endpunkte
@@ -203,28 +99,57 @@ def remove_player(code, player_id):
         return jsonify({"error": str(e)}), 500
 
 
+# Runden-API-Endpunkte
+@app.route("/api/evening/<code>/round/start", methods=["POST"])
+def start_round(code):
+    """Startet eine Runde mit Snapshot der aktiven Spieler"""
+    try:
+        data = request.get_json(silent=True) or {}
+        mode = data.get("mode") or "classic"
+        evening = game_manager.start_round(code, mode=mode)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<code>/round/end", methods=["POST"])
+def end_round(code):
+    """Beendet die laufende Runde"""
+    try:
+        evening = game_manager.end_round(code)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # Statistik-API
 @app.route("/api/statistics/audio", methods=["GET"])
 def get_statistics_audio():
-    """Gibt Audio-Statistiken zurück"""
+    """Gibt Runden-Statistiken zurück (Übergangsformat der alten Audio-Stats,
+    bis die Statistik-Seite auf Abend-Basis umgestellt ist)"""
     try:
-        from utils import calculate_duration
-        
-        # Berechne Statistiken aus audio_events
-        total_starts = len(audio_events)
+        rounds = game_manager.get_all_rounds()
+
+        total_starts = len(rounds)
         total_duration = 0.0
         completed_events = []
-        
-        for event in audio_events:
-            if event["duration"] is not None:
-                total_duration += event["duration"]
+
+        for r in rounds:
+            if r["duration"] is not None:
+                total_duration += r["duration"]
                 completed_events.append({
-                    "started_at": event["started_at"].isoformat() if event["started_at"] else None,
-                    "ended_at": event["ended_at"].isoformat() if event["ended_at"] else None,
-                    "duration": event["duration"],
-                    "duration_formatted": format_duration(event["duration"])
+                    "started_at": r["started_at"],
+                    "ended_at": r["ended_at"],
+                    "duration": r["duration"],
+                    "duration_formatted": format_duration(r["duration"])
                 })
-        
+
         return jsonify({
             "total_starts": total_starts,
             "total_duration": total_duration,
