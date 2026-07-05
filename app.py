@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify, request
-from game_manager import GameManager, EveningNotFound
+from game_manager import GameManager, EveningNotFound, GAME_MODES
 from utils import format_duration
 
 app = Flask(__name__)
@@ -25,6 +25,14 @@ def evening_page(code):
 def statistics(code=None):
     """Statistik-Seite rendern (Code kommt clientseitig aus der URL)"""
     return render_template("statistics.html")
+
+
+@app.route("/api/modes", methods=["GET"])
+def get_modes():
+    """Verfügbare Spielmodi (das UI rendert die Auswahl daraus)"""
+    return jsonify({
+        "modes": [{"id": mode_id, **mode} for mode_id, mode in GAME_MODES.items()]
+    }), 200
 
 
 # Evening-API-Endpunkte

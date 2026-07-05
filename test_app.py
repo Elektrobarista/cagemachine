@@ -91,6 +91,18 @@ def test_rounds(code):
     print("  ✓ Runde offen/geschlossen, Draw-Sperre, Modus-Validierung")
 
 
+def test_modes():
+    print("\n[TEST 8] Spielmodi...")
+    r = requests.get(f"{BASE_URL}/api/modes")
+    assert r.status_code == 200
+    modes = {m["id"]: m for m in r.json()["modes"]}
+    assert set(modes) == {"classic", "headstart_165", "headstart_465"}
+    assert modes["classic"]["start_position"] == 0
+    assert modes["headstart_165"]["start_position"] == 165
+    assert all("label" in m for m in modes.values())
+    print(f"  ✓ {len(modes)} Modi: {', '.join(m['label'] for m in modes.values())}")
+
+
 def test_statistics(code):
     print("\n[TEST 7] Abend-Statistik...")
     r = requests.get(f"{BASE_URL}/api/evening/{code}/statistics")
@@ -123,4 +135,5 @@ if __name__ == "__main__":
     test_remove_player_compaction(code)
     test_rounds(code)
     test_statistics(code)
+    test_modes()
     print("\nAlle Tests bestanden ✓")

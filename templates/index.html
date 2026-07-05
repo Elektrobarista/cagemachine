@@ -194,6 +194,36 @@
       background: #f59e0b;
     }
 
+    /* Spielmodus-Auswahl */
+    .mode-select {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .mode-btn {
+      padding: 10px 16px;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      background: white;
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-btn.selected {
+      background: #667eea;
+      color: white;
+    }
+
+    .mode-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .btn-remove {
       background: #ef4444;
       color: white;
@@ -407,7 +437,9 @@
     <!-- Music Control Card -->
     <div class="card">
       <h1>🎵 Musik Steuerung</h1>
-      
+
+      <div class="mode-select" id="modeSelect"></div>
+
       <div class="music-controls">
         <button class="btn-music btn-start" id="btnStart">▶ Start</button>
         <button class="btn-music btn-pause" id="btnPause" disabled>⏸ Pause</button>
@@ -641,6 +673,8 @@
     let currentEvening = null;   // {code, created_at, players}
     let currentCode = null;
     let currentStatus = "stopped";
+    let gameModes = [];          // von /api/modes
+    let selectedMode = "classic";
     let statusPollInterval = null;
     let positionPollInterval = null;
     let currentPosition = 0;
@@ -872,6 +906,11 @@
     }
 
     function updateButtonStates() {
+      // Modus lässt sich nur vor dem Start wechseln
+      document.querySelectorAll(".mode-btn").forEach(btn => {
+        btn.disabled = currentStatus !== "stopped";
+      });
+
       switch (currentStatus) {
         case "stopped":
           btnStart.disabled = false;
@@ -915,12 +954,38 @@
       }
     });
 
+    // Spielmodus-Auswahl
+    async function loadModes() {
+      const data = await apiCall("/api/modes", "GET");
+      if (data.modes) {
+        gameModes = data.modes;
+        renderModes();
+      }
+    }
+
+    function renderModes() {
+      const modeSelect = document.getElementById("modeSelect");
+      modeSelect.innerHTML = "";
+      gameModes.forEach(mode => {
+        const btn = document.createElement("button");
+        btn.className = "mode-btn" + (mode.id === selectedMode ? " selected" : "");
+        btn.textContent = mode.label;
+        btn.dataset.modeId = mode.id;
+        btn.onclick = () => {
+          selectedMode = mode.id;
+          renderModes();
+          updateButtonStates();
+        };
+        modeSelect.appendChild(btn);
+      });
+    }
+
     // Meldet Rundenstart/-ende an den Server (nur wenn ein Abend geladen ist)
     async function trackRound(action) {
       if (!currentCode) return;
       try {
         const data = await apiCall(`/api/evening/${currentCode}/round/${action}`, "POST",
-          action === "start" ? { mode: "classic" } : null);
+          action === "start" ? { mode: selectedMode } : null);
         if (data.evening) {
           setEvening(data.evening);
         }
@@ -934,7 +999,12 @@
       if (wasPaused) {
         clientAudio.resume();
       } else {
-        clientAudio.start();
+        const mode = gameModes.find(m => m.id === selectedMode);
+        if (mode && mode.start_position > 0) {
+          await clientAudio.startAtPosition(mode.start_position);
+        } else {
+          clientAudio.start();
+        }
       }
       updateStatus();
 
@@ -1025,6 +1095,7 @@
     // Initialisierung
     async function initializePage() {
       updateEveningUI();
+      loadModes();
 
       // 1. Code aus der URL (/abend/<code>) hat Vorrang
       const pathMatch = window.location.pathname.match(/^\/abend\/([A-Za-z0-9]+)$/);

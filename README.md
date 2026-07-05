@@ -1,5 +1,10 @@
 # cagemachine
 
+Webapp für Rage-Cage-Abende: Musik (Intro + nahtloser Endlos-Loop), Spielerverwaltung
+mit Sitzplatz-Auslosung und Runden-Statistik pro Abend. Ein Abend ist über einen kurzen
+Code jederzeit wiederaufnehmbar – die App muss zwischendurch nicht offen bleiben.
+Mehrere Gruppen können parallel mit eigenen Abenden spielen.
+
 ## Installation
 
 ### 1. Python Virtual Environment erstellen
@@ -40,15 +45,30 @@ Alternativ mit Docker:
 docker compose up
 ```
 
-### Im Browser öffnen
+Abende, Spieler und Runden liegen in einer SQLite-Datei (`data/cagemachine.db`,
+über `DB_PATH` konfigurierbar; im Docker-Setup als Volume gemountet).
 
-Öffnen Sie `http://127.0.0.1:3000` in Ihrem Browser.
+### Ablauf eines Abends
+
+1. **Abend starten:** "Neuen Abend starten" erzeugt einen 4-stelligen **Abend-Code**
+   (z. B. `K7FQ`). Mit dem Code lässt sich der Abend jederzeit fortsetzen – per
+   Eingabefeld oder direkt über den Link `/abend/<code>`.
+2. **Spieler hinzufügen** und mit **"Positionen auslosen"** die Sitzreihenfolge
+   bestimmen: Position 1 sitzt am Startbecher (🍺). Nachzügler werden hinten
+   angehängt; wird ein Spieler entfernt, rücken die anderen auf.
+3. **Spielmodus wählen** (Classic oder Headstart-Einstieg) und die Musik starten.
+   Jeder Musik-Start ist eine Runde: Wer gerade mitspielt, wird mit Position
+   festgehalten und in der Statistik gezählt. Pause zählt nicht als Rundenende.
+4. **Statistik** unter `/statistics/<code>`: Runden und Spielzeit pro Spieler,
+   Rundenliste mit Modus und Dauer – auch Tage später noch abrufbar.
 
 ### Steuerung
 
-- **Start-Button:** Startet Intro → Loop Sequenz
-- **Pause-Button:** Pausiert/Setzt fort
-- **Stop-Button:** Stoppt mit Fade-Out (2 Sekunden)
+- **Start-Button:** Startet die Musik im gewählten Modus (= Rundenstart)
+- **Pause-Button:** Pausiert/Setzt fort (Runde läuft weiter)
+- **Stop-Button:** Stoppt die Musik (= Rundenende)
+- **Debug-Headstarts** (hinter "Ich weiß was ich mache!"): springen nur in der
+  Audio-Datei, starten keine Runde und tauchen nicht in der Statistik auf
 
 ### Hotkeys
 
@@ -57,22 +77,41 @@ docker compose up
 
 ## API-Endpunkte
 
-Die Wiedergabe läuft clientseitig im Browser; die Audio-Endpunkte dienen dem Statistik-Tracking:
+Die Wiedergabe läuft clientseitig im Browser (Web Audio API); die API verwaltet
+Abende, Spieler, Runden und Statistik:
 
-- `POST /api/start` - Trackt Audio-Start
-- `POST /api/pause` - Trackt Pause
-- `POST /api/resume` - Trackt Fortsetzen
-- `POST /api/stop` - Trackt Stop
-- `GET /api/status` - Gibt aktuellen Status zurück
-- `GET /api/statistics/audio` - Gibt Audio-Statistiken zurück
+- `POST /api/evening` - Abend anlegen, liefert den Code
+- `GET /api/evening/<code>` - Abend laden (Spieler, Positionen, laufende Runde)
+- `POST /api/evening/<code>/players` - Spieler hinzufügen (`{"name": "..."}`)
+- `DELETE /api/evening/<code>/players/<id>` - Spieler entfernen (bleibt in alten Runden erhalten)
+- `POST /api/evening/<code>/draw` - Sitzpositionen auslosen (1 = Startbecher)
+- `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
+- `POST /api/evening/<code>/round/end` - Laufende Runde beenden
+- `GET /api/evening/<code>/statistics` - Abend-Statistik (Spieler-Auswertung, Rundenliste)
+- `GET /api/modes` - Verfügbare Spielmodi
 
-Dazu kommen die Endpunkte des GameManagers für Abende, Runden und Spieler (siehe `app.py`).
+Integrationstests: Server starten und `python test_app.py` ausführen
+(`BASE_URL` per Umgebungsvariable anpassbar).
 
 ## Technische Details
 
 ### Nahtloser Loop
 
-Die Audio-Wiedergabe läuft clientseitig im Browser über die Web Audio API. Eine zusammengeschnittene Datei (Intro + Loop) wird als `AudioBuffer` geladen; das Looping erfolgt sample-genau über `loop`, `loopStart` und `loopEnd` des `AudioBufferSourceNode`. Die Server-API dient nur noch dem Statistik-Tracking.
+Die Audio-Wiedergabe läuft clientseitig im Browser über die Web Audio API. Eine zusammengeschnittene Datei (Intro + Loop) wird als `AudioBuffer` geladen; das Looping erfolgt sample-genau über `loop`, `loopStart` und `loopEnd` des `AudioBufferSourceNode`.
+
+### Runden-Tracking
+
+Musik-Start und -Stop melden Rundenstart/-ende an den Server. Jede Runde speichert
+einen Snapshot der aktiven Spieler samt Positionen – die Statistik stimmt also auch,
+wenn Spieler später dazukommen oder früher gehen. Verwaiste Runden (Browser geschlossen
+statt Stop) werden beim nächsten Start automatisch geschlossen; unplausibel lange
+Runden (> 2 h) fließen nicht in die Zeitstatistik ein.
+
+### Spielmodi
+
+Die Modi sind zentral in `game_manager.py` (`GAME_MODES`) definiert – ein neuer Modus
+ist ein Dict-Eintrag (Label + Startposition in der Audio-Datei), das UI rendert die
+Auswahl dynamisch über `/api/modes`.
 
 ## Fehlerbehebung
 
@@ -86,6 +125,12 @@ Die Audio-Wiedergabe läuft clientseitig im Browser über die Web Audio API. Ein
 - Prüfen Sie die System-Lautstärke
 - Prüfen Sie die Audio-Dateien (Format, Codec)
 - Die Wiedergabe startet erst nach einer Nutzer-Interaktion (Browser-Autoplay-Richtlinie)
+
+### Abend-Code nicht gefunden
+
+- Codes bestehen aus 4 Zeichen ohne 0/O und 1/I/L (Groß-/Kleinschreibung egal)
+- Abende liegen in `data/cagemachine.db` – wurde die Datei gelöscht oder ein anderer
+  `DB_PATH` gesetzt, sind die Codes weg
 
 ## Lizenz
 
