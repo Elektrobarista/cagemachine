@@ -209,13 +209,90 @@ class GameManager:
             self._close_open_rounds(conn, evening_id, _now())
         return self.get_evening(code)
 
-    def get_all_rounds(self):
-        """Alle Runden über alle Abende (für die globale Statistik-Übergangsansicht)"""
+    def get_statistics(self, code):
+        """Statistik eines Abends: Runden, Spieler-Auswertung, Zusammenfassung"""
+        evening = self.get_evening(code)
         with db.connect() as conn:
-            rows = conn.execute(
-                "SELECT started_at, ended_at, duration FROM round ORDER BY started_at"
+            evening_id = conn.execute(
+                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
+            ).fetchone()["id"]
+
+            rounds = conn.execute(
+                "SELECT * FROM round WHERE evening_id = ? ORDER BY started_at",
+                (evening_id,),
             ).fetchall()
-        return [dict(r) for r in rows]
+            participants = conn.execute(
+                "SELECT rp.round_id, rp.position, r.duration, r.started_at,"
+                "       p.id AS player_id, p.name, p.active"
+                " FROM round_player rp"
+                " JOIN round r ON r.id = rp.round_id"
+                " JOIN player p ON p.id = rp.player_id"
+                " WHERE r.evening_id = ?"
+                " ORDER BY r.started_at",
+                (evening_id,),
+            ).fetchall()
+            all_players = conn.execute(
+                "SELECT * FROM player WHERE evening_id = ?", (evening_id,)
+            ).fetchall()
+
+        by_round = {}
+        for row in participants:
+            by_round.setdefault(row["round_id"], []).append(row)
+
+        rounds_out = []
+        mode_counts = {}
+        total_duration = 0.0
+        longest_round = None
+        for r in rounds:
+            mode_counts[r["mode"]] = mode_counts.get(r["mode"], 0) + 1
+            if r["duration"] is not None:
+                total_duration += r["duration"]
+                if longest_round is None or r["duration"] > longest_round:
+                    longest_round = r["duration"]
+            rounds_out.append({
+                "started_at": r["started_at"],
+                "ended_at": r["ended_at"],
+                "mode": r["mode"],
+                "duration": r["duration"],
+                "player_count": len(by_round.get(r["id"], [])),
+            })
+
+        # Spieler-Auswertung: auch deaktivierte Spieler mit gespielten Runden
+        player_stats = {
+            p["id"]: {
+                "name": p["name"],
+                "active": bool(p["active"]),
+                "rounds_played": 0,
+                "total_duration": 0.0,
+                "last_position": p["position"],
+            }
+            for p in all_players
+        }
+        for row in participants:
+            stats = player_stats[row["player_id"]]
+            stats["rounds_played"] += 1
+            if row["duration"] is not None:
+                stats["total_duration"] += row["duration"]
+            if row["position"] is not None:
+                stats["last_position"] = row["position"]
+
+        players_out = [
+            s for s in player_stats.values()
+            if s["active"] or s["rounds_played"] > 0
+        ]
+        players_out.sort(key=lambda s: (-s["rounds_played"], s["name"].lower()))
+
+        return {
+            "evening": {"code": evening["code"], "created_at": evening["created_at"]},
+            "summary": {
+                "total_rounds": len(rounds_out),
+                "total_duration": total_duration,
+                "longest_round": longest_round,
+                "modes": mode_counts,
+            },
+            "players": players_out,
+            "rounds": rounds_out,
+        }
 
     def deactivate_player(self, code, player_id):
         """Deaktiviert einen Spieler (bleibt für Statistik erhalten)"""

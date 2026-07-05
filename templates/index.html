@@ -348,7 +348,7 @@
   <div class="container">
     <!-- Rage Cage Card -->
     <div class="card">
-      <a href="/statistics" class="nav-link">📊 Statistik anzeigen</a>
+      <a href="/statistics" class="nav-link" id="statisticsLink">📊 Statistik anzeigen</a>
       
       <h1>🍺 Rage Cage</h1>
       
@@ -693,6 +693,7 @@
         if (window.location.pathname !== targetPath) {
           history.replaceState(null, "", targetPath);
         }
+        document.getElementById("statisticsLink").href = `/statistics/${currentCode}`;
       }
       updateEveningUI();
     }

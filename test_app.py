@@ -91,14 +91,28 @@ def test_rounds(code):
     print("  ✓ Runde offen/geschlossen, Draw-Sperre, Modus-Validierung")
 
 
-def test_statistics():
-    print("\n[TEST 7] Statistik...")
-    r = requests.get(f"{BASE_URL}/api/statistics/audio")
+def test_statistics(code):
+    print("\n[TEST 7] Abend-Statistik...")
+    r = requests.get(f"{BASE_URL}/api/evening/{code}/statistics")
     assert r.status_code == 200
     data = r.json()
-    assert data["total_starts"] >= 1
-    assert len(data["completed_events"]) >= 1
-    print(f"  ✓ {data['total_starts']} Runde(n), Gesamtdauer {data['total_duration_formatted']}")
+    assert data["evening"]["code"] == code
+    assert data["summary"]["total_rounds"] >= 1
+    assert len(data["rounds"]) == data["summary"]["total_rounds"]
+
+    # Spieler mit Runden stehen vorn; Snapshot-Teilnehmer müssen gezählt sein
+    top = data["players"][0]
+    assert top["rounds_played"] >= 1, "Top-Spieler sollte mindestens eine Runde haben"
+    assert data["rounds"][0]["player_count"] >= 1, "Runde sollte Teilnehmer haben"
+
+    # Der vor der Runde entfernte Spieler hat keine Runden und taucht nicht auf
+    names = [p["name"] for p in data["players"]]
+    assert len(names) == 2 and set(names) <= {"Anna", "Ben", "Chris"}
+
+    r = requests.get(f"{BASE_URL}/api/evening/XXXX/statistics")
+    assert r.status_code == 404, "Statistik zu unbekanntem Code sollte 404 liefern"
+    print(f"  ✓ {data['summary']['total_rounds']} Runde(n), "
+          f"Top-Spieler {top['name']} mit {top['rounds_played']} Runde(n)")
 
 
 if __name__ == "__main__":
@@ -108,5 +122,5 @@ if __name__ == "__main__":
     test_draw(code)
     test_remove_player_compaction(code)
     test_rounds(code)
-    test_statistics()
+    test_statistics(code)
     print("\nAlle Tests bestanden ✓")

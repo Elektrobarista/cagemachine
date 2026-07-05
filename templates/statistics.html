@@ -137,29 +137,48 @@
         <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;">🍺 Zum laufenden Abend</a>
       </div>
       
-      <h1>📊 Statistik</h1>
+      <h1>📊 Statistik <span id="eveningCodeTitle" style="color: #667eea;"></span></h1>
 
       <div class="stats-overview" id="statsOverview">
         <div class="stat-card">
-          <div class="stat-value" id="totalStarts">-</div>
-          <div class="stat-label">Audio-Starts</div>
+          <div class="stat-value" id="totalRounds">-</div>
+          <div class="stat-label">Runden</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="totalDuration">-</div>
-          <div class="stat-label">Gesamte Audio-Zeit</div>
+          <div class="stat-label">Gesamte Spielzeit</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="longestRound">-</div>
+          <div class="stat-label">Längste Runde</div>
         </div>
       </div>
 
-      <div id="audioContainer">
+      <h2 style="font-size: 20px; margin-bottom: 4px;">👥 Spieler</h2>
+      <div id="playersContainer">
         <div class="loading">Lade Statistik...</div>
       </div>
+
+      <h2 style="font-size: 20px; margin: 28px 0 4px;">🎵 Runden</h2>
+      <div id="roundsContainer"></div>
     </div>
   </div>
 
   <script>
     const API_BASE = "";
-    const statsOverview = document.getElementById("statsOverview");
-    const audioContainer = document.getElementById("audioContainer");
+    const playersContainer = document.getElementById("playersContainer");
+    const roundsContainer = document.getElementById("roundsContainer");
+
+    // Abend-Code: URL (/statistics/<code>) vor localStorage
+    const pathMatch = window.location.pathname.match(/^\/statistics\/([A-Za-z0-9]+)$/);
+    const eveningCode = pathMatch ? pathMatch[1].toUpperCase()
+      : localStorage.getItem("cagemachine:lastEveningCode");
+
+    function esc(text) {
+      const div = document.createElement("div");
+      div.textContent = text ?? "";
+      return div.innerHTML;
+    }
 
     async function apiCall(endpoint, method = "GET", body = null) {
       try {
@@ -206,69 +225,99 @@
       });
     }
 
+    const MODE_LABELS = {
+      "classic": "Classic",
+      "headstart_165": "Headstart 2:45",
+      "headstart_465": "Headstart 7:45"
+    };
+
     async function loadStatistics() {
-      const data = await apiCall("/api/statistics/audio", "GET");
-      
-      if (data.error) {
-        audioContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon">⚠️</div>
-          <div class="empty-state-text">Fehler beim Laden der Statistik</div>
+      if (!eveningCode) {
+        playersContainer.innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">🍺</div>
+          <div class="empty-state-text">Kein Abend ausgewählt</div>
+          <p style="margin-top: 12px; color: #999;">Starte einen Abend oder öffne /statistics/&lt;Code&gt;.</p>
         </div>`;
         return;
       }
 
-      // Update Overview
-      document.getElementById("totalStarts").textContent = data.total_starts || 0;
-      document.getElementById("totalDuration").textContent = data.total_duration_formatted || "00:00";
+      const data = await apiCall(`/api/evening/${encodeURIComponent(eveningCode)}/statistics`, "GET");
 
-      // Render Audio Events
-      if (!data.completed_events || data.completed_events.length === 0) {
-        audioContainer.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🎵</div>
-            <div class="empty-state-text">Noch keine Audio-Events</div>
-            <p style="margin-top: 12px; color: #999;">Starte die Musik, um Events zu tracken.</p>
-          </div>
-        `;
+      if (data.error) {
+        playersContainer.innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <div class="empty-state-text">${esc(data.error)}</div>
+        </div>`;
         return;
       }
 
-      let tableHTML = `
-        <table class="games-table">
-          <thead>
-            <tr>
-              <th>Gestartet am</th>
-              <th>Beendet am</th>
-              <th>Dauer</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
+      document.getElementById("eveningCodeTitle").textContent = data.evening.code;
+      document.getElementById("totalRounds").textContent = data.summary.total_rounds;
+      document.getElementById("totalDuration").textContent = data.summary.total_duration_formatted || "00:00";
+      document.getElementById("longestRound").textContent =
+        data.summary.longest_round !== null ? data.summary.longest_round_formatted : "–";
 
-      data.completed_events.forEach(event => {
-        tableHTML += `
-          <tr>
-            <td>${formatDateTime(event.started_at)}</td>
-            <td>${formatDateTime(event.ended_at)}</td>
-            <td>${event.duration_formatted || "00:00"}</td>
-          </tr>
+      // Spieler-Tabelle
+      if (!data.players.length) {
+        playersContainer.innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">👥</div>
+          <div class="empty-state-text">Noch keine Spieler</div>
+        </div>`;
+      } else {
+        let html = `
+          <table class="games-table">
+            <thead>
+              <tr><th>Spieler</th><th>Runden</th><th>Spielzeit</th><th>Position</th></tr>
+            </thead>
+            <tbody>
         `;
-      });
+        data.players.forEach(p => {
+          const name = esc(p.name) + (p.active ? "" : " <span style='color:#999;'>(ausgeschieden)</span>");
+          const pos = p.last_position === null ? "–"
+            : (p.last_position === 1 ? "1 🍺" : p.last_position);
+          html += `<tr>
+            <td>${name}</td>
+            <td>${p.rounds_played}</td>
+            <td>${p.total_duration_formatted}</td>
+            <td>${pos}</td>
+          </tr>`;
+        });
+        playersContainer.innerHTML = html + "</tbody></table>";
+      }
 
-      tableHTML += `
-          </tbody>
-        </table>
-      `;
-
-      audioContainer.innerHTML = tableHTML;
+      // Runden-Tabelle
+      if (!data.rounds.length) {
+        roundsContainer.innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">🎵</div>
+          <div class="empty-state-text">Noch keine Runden</div>
+          <p style="margin-top: 12px; color: #999;">Starte die Musik, um eine Runde zu tracken.</p>
+        </div>`;
+      } else {
+        let html = `
+          <table class="games-table">
+            <thead>
+              <tr><th>Gestartet am</th><th>Modus</th><th>Dauer</th><th>Mitspieler</th></tr>
+            </thead>
+            <tbody>
+        `;
+        // Neueste zuerst
+        [...data.rounds].reverse().forEach(r => {
+          const running = r.ended_at === null;
+          html += `<tr>
+            <td>${formatDateTime(r.started_at)}</td>
+            <td>${esc(MODE_LABELS[r.mode] || r.mode)}</td>
+            <td>${running ? "<span style='color:#10b981;font-weight:600;'>läuft …</span>" : r.duration_formatted}</td>
+            <td>${r.player_count}</td>
+          </tr>`;
+        });
+        roundsContainer.innerHTML = html + "</tbody></table>";
+      }
     }
 
     function checkCurrentEvening() {
-      // Zuletzt genutzter Abend-Code aus dem Browser (kein Server-Zustand mehr)
-      const lastCode = localStorage.getItem("cagemachine:lastEveningCode");
       const link = document.getElementById("backToEveningLink");
-      if (lastCode) {
-        link.href = `/abend/${lastCode}`;
+      if (eveningCode) {
+        link.href = `/abend/${eveningCode}`;
         link.style.display = "inline-block";
       } else {
         link.style.display = "none";

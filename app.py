@@ -21,8 +21,9 @@ def evening_page(code):
 
 
 @app.route("/statistics")
-def statistics():
-    """Statistik-Seite rendern"""
+@app.route("/statistics/<code>")
+def statistics(code=None):
+    """Statistik-Seite rendern (Code kommt clientseitig aus der URL)"""
     return render_template("statistics.html")
 
 
@@ -129,33 +130,22 @@ def end_round(code):
 
 
 # Statistik-API
-@app.route("/api/statistics/audio", methods=["GET"])
-def get_statistics_audio():
-    """Gibt Runden-Statistiken zurück (Übergangsformat der alten Audio-Stats,
-    bis die Statistik-Seite auf Abend-Basis umgestellt ist)"""
+@app.route("/api/evening/<code>/statistics", methods=["GET"])
+def get_evening_statistics(code):
+    """Statistik eines Abends: Zusammenfassung, Spieler-Auswertung, Rundenliste"""
     try:
-        rounds = game_manager.get_all_rounds()
+        stats = game_manager.get_statistics(code)
 
-        total_starts = len(rounds)
-        total_duration = 0.0
-        completed_events = []
+        stats["summary"]["total_duration_formatted"] = format_duration(stats["summary"]["total_duration"])
+        stats["summary"]["longest_round_formatted"] = format_duration(stats["summary"]["longest_round"])
+        for player in stats["players"]:
+            player["total_duration_formatted"] = format_duration(player["total_duration"])
+        for r in stats["rounds"]:
+            r["duration_formatted"] = format_duration(r["duration"]) if r["duration"] is not None else "–"
 
-        for r in rounds:
-            if r["duration"] is not None:
-                total_duration += r["duration"]
-                completed_events.append({
-                    "started_at": r["started_at"],
-                    "ended_at": r["ended_at"],
-                    "duration": r["duration"],
-                    "duration_formatted": format_duration(r["duration"])
-                })
-
-        return jsonify({
-            "total_starts": total_starts,
-            "total_duration": total_duration,
-            "total_duration_formatted": format_duration(total_duration),
-            "completed_events": completed_events
-        }), 200
+        return jsonify(stats), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
