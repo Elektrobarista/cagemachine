@@ -96,9 +96,8 @@ def test_modes():
     r = requests.get(f"{BASE_URL}/api/modes")
     assert r.status_code == 200
     modes = {m["id"]: m for m in r.json()["modes"]}
-    assert {"classic", "headstart_165", "headstart_465"} <= set(modes)
+    assert "classic" in modes
     assert modes["classic"]["start_position"] == 0
-    assert modes["headstart_165"]["start_position"] == 165
 
     # Jeder Modus braucht die volle Definition
     for m in modes.values():

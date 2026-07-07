@@ -56,7 +56,7 @@ Abende, Spieler und Runden liegen in einer SQLite-Datei (`data/cagemachine.db`,
 2. **Spieler hinzufügen** und mit **"Positionen auslosen"** die Sitzreihenfolge
    bestimmen: Position 1 sitzt am Startbecher (🍺). Nachzügler werden hinten
    angehängt; wird ein Spieler entfernt, rücken die anderen auf.
-3. **Spielmodus wählen** (Classic oder Headstart-Einstieg) und die Musik starten.
+3. **Spielmodus wählen** (bisher Classic) und die Musik starten.
    Jeder Musik-Start ist eine Runde: Wer gerade mitspielt, wird mit Position
    festgehalten und in der Statistik gezählt. Pause zählt nicht als Rundenende.
 4. **Statistik** unter `/statistics/<code>`: Runden und Spielzeit pro Spieler,

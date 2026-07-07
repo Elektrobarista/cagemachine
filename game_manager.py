@@ -32,20 +32,6 @@ GAME_MODES = {
         "time_limit": None,
         "audio": DEFAULT_AUDIO,
     },
-    "headstart_165": {
-        "label": "Headstart 2:45",
-        "description": "Einstieg bei 2:45 – verkürztes Intro",
-        "start_position": 165,
-        "time_limit": None,
-        "audio": DEFAULT_AUDIO,
-    },
-    "headstart_465": {
-        "label": "Headstart 7:45",
-        "description": "Einstieg bei 7:45 – direkt im Loop",
-        "start_position": 465,
-        "time_limit": None,
-        "audio": DEFAULT_AUDIO,
-    },
 }
 
 # Länger kann eine echte Runde nicht dauern; verwaiste Runden (Browser
