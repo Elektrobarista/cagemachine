@@ -98,16 +98,57 @@ def test_modes():
     modes = {m["id"]: m for m in r.json()["modes"]}
     assert "classic" in modes
     assert modes["classic"]["start_position"] == 0
+    assert modes["classic"]["round_count"] == 1
+    assert modes["bullrush"]["round_count"] == 3
 
     # Jeder Modus braucht die volle Definition
     for m in modes.values():
         assert "label" in m and "description" in m
         assert "time_limit" in m  # None erlaubt
+        assert m["round_count"] >= 1
         audio = m["audio"]
         assert audio["file"].startswith("/static/")
         assert audio["loop_start"] < audio["loop_end"]
         assert 0 <= m["start_position"] < audio["loop_end"]
     print(f"  ✓ {len(modes)} Modi: {', '.join(m['label'] for m in modes.values())}")
+
+
+def test_random_bullrush():
+    print("\n[TEST 9] Zufalls-Bullrush (Abend-Einstellung)...")
+    # Eigener frischer Abend, damit die übrigen Tests unbeeinflusst bleiben
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    assert requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["random_bullrush"] is False
+
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/settings", json={"random_bullrush": True})
+    assert r.status_code == 200
+    assert r.json()["evening"]["random_bullrush"] is True
+
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/settings", json={"random_bullrush": "ja"})
+    assert r.status_code == 400, "Nicht-boolescher Wert sollte 400 liefern"
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/settings", json={})
+    assert r.status_code == 400, "Fehlender Wert sollte 400 liefern"
+    r = requests.post(f"{BASE_URL}/api/evening/XXXX/settings", json={"random_bullrush": True})
+    assert r.status_code == 404, "Unbekannter Code sollte 404 liefern"
+
+    # Trigger nur deterministisch prüfbar, wenn der Server mit
+    # BULLRUSH_CHANCE=1.0 läuft (Env-Var auch dem Test mitgeben)
+    if os.getenv("BULLRUSH_CHANCE") == "1.0":
+        r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+        assert r.json()["evening"]["open_round"]["mode"] == "bullrush", \
+            "Bei Chance 1.0 muss die Classic-Runde zum Bullrush werden"
+        # Folgerunden werden als bullrush gemeldet und nicht erneut verwürfelt
+        r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "bullrush"})
+        assert r.json()["evening"]["open_round"]["mode"] == "bullrush"
+        requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+        # Cooldown: trotz Chance 1.0 darf der Trigger nicht sofort wieder zuschlagen
+        r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+        assert r.json()["evening"]["open_round"]["mode"] == "classic", \
+            "Zweiter Trigger innerhalb des Cooldowns muss ausbleiben"
+        requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+        print("  ✓ Toggle, Validierung, Trigger und Cooldown (BULLRUSH_CHANCE=1.0)")
+    else:
+        print("  ✓ Toggle und Validierung (Trigger-Test übersprungen, BULLRUSH_CHANCE nicht 1.0)")
 
 
 def test_statistics(code):
@@ -143,4 +184,5 @@ if __name__ == "__main__":
     test_rounds(code)
     test_statistics(code)
     test_modes()
+    test_random_bullrush()
     print("\nAlle Tests bestanden ✓")

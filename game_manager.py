@@ -1,4 +1,5 @@
 """Business-Logik für Abend- und Spieler-Management (SQLite-basiert)"""
+import os
 import random
 import sqlite3
 import uuid
@@ -23,6 +24,7 @@ DEFAULT_AUDIO = {
 #   description    Tooltip/Erklärung im UI
 #   start_position Einstiegspunkt in der Audio-Datei (Sekunden, 0 = von vorn)
 #   time_limit     Runde endet automatisch nach X Sekunden (None = kein Limit)
+#   round_count    Anzahl direkt aufeinanderfolgender Runden (1 = normale Einzelrunde)
 #   audio          Audio-Datei mit Loop-Punkten (eigene Datei pro Modus möglich)
 GAME_MODES = {
     "classic": {
@@ -30,9 +32,26 @@ GAME_MODES = {
         "description": "Intro + Endlos-Loop von vorn",
         "start_position": 0,
         "time_limit": None,
+        "round_count": 1,
+        "audio": DEFAULT_AUDIO,
+    },
+    "bullrush": {
+        "label": "Bullrush",
+        "description": "3 Runden direkt hintereinander – nach jedem Stop startet sofort das nächste Intro",
+        "start_position": 0,
+        "time_limit": None,
+        "round_count": 3,
         "audio": DEFAULT_AUDIO,
     },
 }
+
+# Chance, dass ein normaler Rundenstart zum Bullrush wird, wenn der Abend
+# "Zufalls-Bullrush" aktiviert hat (per Env-Var übersteuerbar, z. B. 1.0 in Tests)
+BULLRUSH_CHANCE = float(os.getenv("BULLRUSH_CHANCE", "0.15"))
+
+# Frühestens nach dieser Zeit darf der Zufalls-Bullrush am selben Abend
+# erneut zuschlagen (Sekunden, per Env-Var übersteuerbar)
+BULLRUSH_COOLDOWN = float(os.getenv("BULLRUSH_COOLDOWN", str(3.5 * 60 * 60)))
 
 # Länger kann eine echte Runde nicht dauern; verwaiste Runden (Browser
 # geschlossen statt Stop) bekommen beim Aufräumen keine Dauer, damit sie
@@ -119,9 +138,20 @@ class GameManager:
         return {
             "code": evening["code"],
             "created_at": evening["created_at"],
+            "random_bullrush": bool(evening["random_bullrush"]),
             "players": [_player_dict(p) for p in players],
             "open_round": dict(open_round) if open_round else None,
         }
+
+    def set_random_bullrush(self, code, enabled):
+        """Schaltet den Zufalls-Bullrush für einen Abend an/aus"""
+        evening = self.get_evening(code)
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE evening SET random_bullrush = ? WHERE code = ?",
+                (1 if enabled else 0, evening["code"]),
+            )
+        return self.get_evening(code)
 
     def add_player(self, code, name):
         """Fügt einen Spieler zum Abend hinzu (Name eindeutig unter aktiven Spielern)"""
@@ -197,9 +227,30 @@ class GameManager:
         evening = self.get_evening(code)
         now = _now()
         with db.connect() as conn:
-            evening_id = conn.execute(
-                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
-            ).fetchone()["id"]
+            row = conn.execute(
+                "SELECT id, random_bullrush, last_bullrush_at FROM evening WHERE code = ?",
+                (evening["code"],),
+            ).fetchone()
+            evening_id = row["id"]
+
+            # Zufalls-Bullrush: normale Einzelrunden können überraschend zum
+            # Bullrush werden – höchstens einmal pro Cooldown und nie bei
+            # einem manuell gestarteten Bullrush
+            cooldown_over = (
+                row["last_bullrush_at"] is None
+                or _duration_seconds(row["last_bullrush_at"], now) >= BULLRUSH_COOLDOWN
+            )
+            if (
+                row["random_bullrush"]
+                and GAME_MODES[mode]["round_count"] == 1
+                and cooldown_over
+                and random.random() < BULLRUSH_CHANCE
+            ):
+                mode = "bullrush"
+                conn.execute(
+                    "UPDATE evening SET last_bullrush_at = ? WHERE id = ?",
+                    (now, evening_id),
+                )
 
             # Läuft laut DB noch eine Runde, wird sie automatisch geschlossen
             self._close_open_rounds(conn, evening_id, now)

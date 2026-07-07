@@ -108,6 +108,23 @@ def remove_player(code, player_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/evening/<code>/settings", methods=["POST"])
+def update_settings(code):
+    """Abend-Einstellungen ändern (bisher nur random_bullrush)"""
+    try:
+        data = request.get_json(silent=True) or {}
+        enabled = data.get("random_bullrush")
+        if not isinstance(enabled, bool):
+            return jsonify({"error": "random_bullrush muss true oder false sein"}), 400
+
+        evening = game_manager.set_random_bullrush(code, enabled)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # Runden-API-Endpunkte
 @app.route("/api/evening/<code>/round/start", methods=["POST"])
 def start_round(code):

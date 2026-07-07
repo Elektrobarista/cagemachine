@@ -5,10 +5,12 @@ from contextlib import contextmanager
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evening (
-    id           TEXT PRIMARY KEY,
-    code         TEXT UNIQUE NOT NULL,
-    created_at   TEXT NOT NULL,
-    last_used_at TEXT NOT NULL
+    id               TEXT PRIMARY KEY,
+    code             TEXT UNIQUE NOT NULL,
+    created_at       TEXT NOT NULL,
+    last_used_at     TEXT NOT NULL,
+    random_bullrush  INTEGER NOT NULL DEFAULT 0,
+    last_bullrush_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS player (
@@ -69,3 +71,12 @@ def init_db():
     """Legt das Schema an, falls es noch nicht existiert"""
     with connect() as conn:
         conn.executescript(SCHEMA)
+        # Mini-Migration: Spalten, die nach dem ersten Release dazukamen
+        # (CREATE TABLE IF NOT EXISTS fasst bestehende Tabellen nicht an)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(evening)")}
+        if "random_bullrush" not in columns:
+            conn.execute(
+                "ALTER TABLE evening ADD COLUMN random_bullrush INTEGER NOT NULL DEFAULT 0"
+            )
+        if "last_bullrush_at" not in columns:
+            conn.execute("ALTER TABLE evening ADD COLUMN last_bullrush_at TEXT")

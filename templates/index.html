@@ -224,6 +224,32 @@
       cursor: not-allowed;
     }
 
+    /* Bullrush: Runden-Zähler + Trigger-Ansage */
+    #multiRoundInfo {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fdf2e3;
+      color: #e67e22;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    #bullrushBanner {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.75);
+      color: white;
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
     .btn-remove {
       background: #ef4444;
       color: white;
@@ -407,6 +433,10 @@
           <span class="session-info-label">Spieler:</span>
           <span class="session-info-value" id="playerCount">0</span>
         </div>
+        <div class="session-info-item">
+          <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden">🐂 Zufalls-Bullrush:</span>
+          <input type="checkbox" id="randomBullrushToggle" style="width: 20px; height: 20px; cursor: pointer;" />
+        </div>
       </div>
 
       <div id="playerSection" style="display: none;">
@@ -452,6 +482,8 @@
       </div>
 
       <div class="status" id="status">Status: bereit</div>
+      <div id="multiRoundInfo" style="display: none;"></div>
+      <div id="bullrushBanner" style="display: none;">🐂 BULLRUSH!</div>
       
       <div class="scrubber-container" style="display: none;">
         <div class="scrubber-wrapper">
@@ -511,6 +543,9 @@
 
       stopSource() {
         if (this.source) {
+          // onended lösen, sonst startet source.stop() über den Handler
+          // der Intro-Quelle noch den Loop (scheduleLoop)
+          this.source.onended = null;
           try { this.source.stop(); } catch {}
           this.source.disconnect();
         }
@@ -697,6 +732,10 @@
     let currentPosition = 0;
     let totalDuration = 0;
 
+    // Mehrfach-Runden (Bullrush): total > 1, solange ein Bullrush läuft;
+    // pendingStart ist das Wartefenster vor der nächsten Auto-Runde
+    const multiRound = { total: 0, current: 0, modeId: null, pendingStart: null };
+
     // API-Call Helper
     async function apiCall(endpoint, method = "POST", body = null) {
       try {
@@ -771,6 +810,7 @@
       const data = await apiCall(`/api/evening/${encodeURIComponent(code)}`, "GET");
       if (data.evening) {
         setEvening(data.evening);
+        await restoreMultiRound(data.evening);
         return true;
       }
       if (data.error) {
@@ -846,6 +886,7 @@
       document.getElementById("eveningCode").textContent = currentEvening.code;
       const players = currentEvening.players || [];
       document.getElementById("playerCount").textContent = players.length;
+      randomBullrushToggle.checked = !!currentEvening.random_bullrush;
 
       // Player List
       if (players.length === 0) {
@@ -923,16 +964,20 @@
     }
 
     function updateButtonStates() {
+      // Im Wartefenster vor der nächsten Bullrush-Runde gilt der Bullrush
+      // als "läuft": Stop bleibt aktiv (Doppel-Stop), Start/Modus gesperrt
+      const pendingBullrush = multiRound.pendingStart !== null;
+
       // Modus lässt sich nur vor dem Start wechseln
       document.querySelectorAll(".mode-btn").forEach(btn => {
-        btn.disabled = currentStatus !== "stopped";
+        btn.disabled = currentStatus !== "stopped" || pendingBullrush;
       });
 
       switch (currentStatus) {
         case "stopped":
-          btnStart.disabled = false;
+          btnStart.disabled = pendingBullrush;
           btnPause.disabled = true;
-          btnStop.disabled = true;
+          btnStop.disabled = !pendingBullrush;
           btnPause.textContent = "⏸ Pause";
           break;
         case "intro":
@@ -965,6 +1010,24 @@
     });
     btnAddPlayer.addEventListener("click", addPlayer);
     btnDraw.addEventListener("click", drawPositions);
+    const randomBullrushToggle = document.getElementById("randomBullrushToggle");
+    randomBullrushToggle.addEventListener("change", async () => {
+      if (!currentCode) return;
+      const enabled = randomBullrushToggle.checked;
+      randomBullrushToggle.disabled = true; // keine parallelen Requests
+      try {
+        const data = await apiCall(`/api/evening/${currentCode}/settings`, "POST",
+          { random_bullrush: enabled });
+        if (data.evening) {
+          setEvening(data.evening);
+        } else {
+          randomBullrushToggle.checked = !enabled; // bei Fehler zurückdrehen
+          if (data.error) alert(data.error);
+        }
+      } finally {
+        randomBullrushToggle.disabled = false;
+      }
+    });
     playerNameInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         addPlayer();
@@ -998,18 +1061,130 @@
       });
     }
 
-    // Meldet Rundenstart/-ende an den Server (nur wenn ein Abend geladen ist)
-    async function trackRound(action) {
+    // Meldet Rundenstart/-ende an den Server (nur wenn ein Abend geladen ist).
+    // mode: Modus für den Start (Bullrush-Folgerunden weichen vom selectedMode ab)
+    async function trackRound(action, mode = selectedMode) {
       if (!currentCode) return;
       try {
         const data = await apiCall(`/api/evening/${currentCode}/round/${action}`, "POST",
-          action === "start" ? { mode: selectedMode } : null);
+          action === "start" ? { mode } : null);
         if (data.evening) {
           setEvening(data.evening);
+
+          // Zufalls-Bullrush: der Server kann eine normale Runde zum
+          // Bullrush machen – erkennbar am abweichenden Modus der Antwort
+          const openRound = data.evening.open_round;
+          if (action === "start" && openRound && openRound.mode !== mode) {
+            const triggered = gameModes.find(m => m.id === openRound.mode);
+            if (triggered && triggered.round_count > 1 && multiRound.total <= 1) {
+              multiRound.total = triggered.round_count;
+              multiRound.current = 1;
+              multiRound.modeId = triggered.id;
+              updateMultiRoundUI();
+              showBullrushBanner();
+            }
+          }
         }
       } catch (e) {
         console.error("Runden-Tracking fehlgeschlagen:", e);
       }
+    }
+
+    // Bullrush-Anzeige und -Zustand
+    const multiRoundInfo = document.getElementById("multiRoundInfo");
+    const bullrushBanner = document.getElementById("bullrushBanner");
+
+    function updateMultiRoundUI() {
+      if (multiRound.total > 1) {
+        multiRoundInfo.style.display = "block";
+        multiRoundInfo.textContent = `🐂 Bullrush: Runde ${multiRound.current}/${multiRound.total}`;
+      } else {
+        multiRoundInfo.style.display = "none";
+      }
+    }
+
+    function resetMultiRound() {
+      if (multiRound.pendingStart) {
+        clearTimeout(multiRound.pendingStart);
+      }
+      multiRound.total = 0;
+      multiRound.current = 0;
+      multiRound.modeId = null;
+      multiRound.pendingStart = null;
+      updateMultiRoundUI();
+    }
+
+    function showBullrushBanner() {
+      bullrushBanner.style.display = "flex";
+      setTimeout(() => { bullrushBanner.style.display = "none"; }, 3000);
+    }
+
+    // Wendet die Modus-Config an und startet die Musik samt roundTimer.
+    // Gemeinsame Basis für manuellen Start und Bullrush-Folgerunden;
+    // liefert false, wenn das Audio nicht startet (dann keine Runde tracken).
+    async function startModeAudio(mode, errorMessage) {
+      if (mode && mode.audio) {
+        clientAudio.applyConfig(mode.audio);
+      }
+      try {
+        if (mode && mode.start_position > 0) {
+          await clientAudio.startAtPosition(mode.start_position);
+        } else {
+          await clientAudio.start();
+        }
+      } catch (e) {
+        console.error("Audio-Start fehlgeschlagen:", e);
+        alert(errorMessage);
+        clientAudio.stop();
+        updateStatus();
+        return false;
+      }
+      roundTimer.limit = (mode && mode.time_limit) || null;
+      roundTimer.elapsed = 0;
+      return true;
+    }
+
+    // Startet die nächste Bullrush-Runde (nach dem Wartefenster)
+    async function startNextMultiRound() {
+      multiRound.pendingStart = null;
+      multiRound.current += 1;
+      const mode = gameModes.find(m => m.id === multiRound.modeId);
+      if (!(await startModeAudio(mode, "Audio konnte nicht geladen werden. Bullrush abgebrochen."))) {
+        resetMultiRound();
+        return;
+      }
+      updateMultiRoundUI();
+      updateStatus();
+      await trackRound("start", multiRound.modeId);
+    }
+
+    // Nach dem Laden eines Abends: läuft serverseitig noch eine Runde eines
+    // Multi-Runden-Modus (z. B. Reload mitten im Bullrush), den lokalen
+    // Zustand daraus rekonstruieren, damit Zähler und Auto-Restart erhalten bleiben
+    async function restoreMultiRound(evening) {
+      const openRound = evening.open_round;
+      if (!openRound || multiRound.total > 1) return;
+      const mode = gameModes.find(m => m.id === openRound.mode);
+      if (!mode || !(mode.round_count > 1)) return;
+
+      multiRound.total = mode.round_count;
+      multiRound.current = 1;
+      multiRound.modeId = mode.id;
+
+      // Rundennummer schätzen: aufeinanderfolgende Runden desselben Modus am
+      // Ende der Rundenliste (Modulo fängt direkt hintereinander gespielte
+      // Bullrushes ab; Heuristik, bei abgebrochenen Bullrushes ggf. ungenau)
+      const data = await apiCall(`/api/evening/${evening.code}/statistics`, "GET");
+      if (data.rounds) {
+        let streak = 0;
+        for (let i = data.rounds.length - 1; i >= 0 && data.rounds[i].mode === mode.id; i--) {
+          streak++;
+        }
+        if (streak > 0) {
+          multiRound.current = ((streak - 1) % multiRound.total) + 1;
+        }
+      }
+      updateMultiRoundUI();
     }
 
     // Zeitlimit: zählt nur, während Musik läuft (Pause hält das Limit an)
@@ -1027,34 +1202,38 @@
 
     btnStart.addEventListener("click", async () => {
       const wasPaused = clientAudio.state === "paused";
+      // Steht ein rekonstruierter Bullrush im Raum (Reload mitten im Bullrush:
+      // multiRound gesetzt, Musik aber gestoppt), setzt Start die laufende
+      // Bullrush-Runde fort statt einen neuen Durchgang zu beginnen
+      const resumingMultiRound = !wasPaused && multiRound.total > 1;
+      let startedMode = selectedMode;
       if (wasPaused) {
         clientAudio.resume();
       } else {
-        const mode = gameModes.find(m => m.id === selectedMode);
-        if (mode && mode.audio) {
-          clientAudio.applyConfig(mode.audio);
-        }
-        try {
-          if (mode && mode.start_position > 0) {
-            await clientAudio.startAtPosition(mode.start_position);
-          } else {
-            await clientAudio.start();
-          }
-        } catch (e) {
-          console.error("Audio-Start fehlgeschlagen:", e);
-          alert("Audio konnte nicht geladen werden. Prüfe die Audio-Datei des Modus.");
-          clientAudio.stop();
-          updateStatus();
+        startedMode = resumingMultiRound ? multiRound.modeId : selectedMode;
+        const mode = gameModes.find(m => m.id === startedMode);
+        if (!(await startModeAudio(mode, "Audio konnte nicht geladen werden. Prüfe die Audio-Datei des Modus."))) {
           return; // keine Runde ohne Musik
         }
-        roundTimer.limit = (mode && mode.time_limit) || null;
-        roundTimer.elapsed = 0;
+
+        if (resumingMultiRound) {
+          updateMultiRoundUI();
+        } else {
+          // Mehrfach-Runden-Modus (Bullrush) manuell gestartet
+          resetMultiRound();
+          if (mode && mode.round_count > 1) {
+            multiRound.total = mode.round_count;
+            multiRound.current = 1;
+            multiRound.modeId = mode.id;
+            updateMultiRoundUI();
+          }
+        }
       }
       updateStatus();
 
       // Nur ein echter Start ist eine neue Runde, Resume nicht
       if (!wasPaused) {
-        await trackRound("start");
+        await trackRound("start", startedMode);
       }
     });
 
@@ -1069,16 +1248,34 @@
     });
 
     btnStop.addEventListener("click", async () => {
+      // Doppel-Stop im Wartefenster bricht den ganzen Bullrush ab
+      // (die nächste Runde wurde noch nicht gestartet, es entsteht keine Leer-Runde)
+      if (multiRound.pendingStart) {
+        resetMultiRound();
+        updateStatus();
+        return;
+      }
+
       roundTimer.limit = null;
       clientAudio.stop();
       updateStatus();
       await trackRound("end");
+
+      // Bullrush: nächste Runde nach kurzem Wartefenster automatisch starten;
+      // das Fenster ist zugleich die Chance für den Doppel-Stop
+      if (multiRound.total > 1 && multiRound.current < multiRound.total) {
+        multiRound.pendingStart = setTimeout(startNextMultiRound, 1500);
+        updateButtonStates(); // Stop bleibt für den Doppel-Stop aktiv
+      } else {
+        resetMultiRound();
+      }
     });
 
     const headstartPlay = async (seconds) => {
       // Debug-Funktion: springt nur in der Audio-Datei, startet KEINE Runde.
       // Die Sprungziele beziehen sich auf die Standard-Datei, daher immer
       // deren Config anwenden (unabhängig vom gewählten Modus).
+      resetMultiRound(); // kein Auto-Start einer Bullrush-Runde über den Debug-Sound
       clientAudio.applyConfig(DEFAULT_AUDIO_CONFIG);
       currentPosition = seconds;
       timeDisplay.textContent = formatTime(currentPosition);
@@ -1131,7 +1328,8 @@
 
       if (e.code === "KeyS" && (e.ctrlKey || e.metaKey) === false) {
         e.preventDefault();
-        if (currentStatus !== "stopped") {
+        // Auch im Bullrush-Wartefenster (Status "stopped") erlaubt: Doppel-S = Abbruch
+        if (currentStatus !== "stopped" || multiRound.pendingStart) {
           btnStop.click();
         }
       }
@@ -1149,7 +1347,8 @@
     // Initialisierung
     async function initializePage() {
       updateEveningUI();
-      loadModes();
+      // Vor dem Abend laden, damit restoreMultiRound die Modi kennt
+      await loadModes();
 
       // 1. Code aus der URL (/abend/<code>) hat Vorrang
       const pathMatch = window.location.pathname.match(/^\/abend\/([A-Za-z0-9]+)$/);

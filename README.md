@@ -56,9 +56,16 @@ Abende, Spieler und Runden liegen in einer SQLite-Datei (`data/cagemachine.db`,
 2. **Spieler hinzufügen** und mit **"Positionen auslosen"** die Sitzreihenfolge
    bestimmen: Position 1 sitzt am Startbecher (🍺). Nachzügler werden hinten
    angehängt; wird ein Spieler entfernt, rücken die anderen auf.
-3. **Spielmodus wählen** (bisher Classic) und die Musik starten.
+3. **Spielmodus wählen** (Classic oder Bullrush) und die Musik starten.
    Jeder Musik-Start ist eine Runde: Wer gerade mitspielt, wird mit Position
    festgehalten und in der Statistik gezählt. Pause zählt nicht als Rundenende.
+   **Bullrush** = 3 Runden direkt hintereinander: Nach jedem Stop startet nach
+   kurzem Moment automatisch das nächste Intro; zweimal Stop hintereinander
+   bricht den ganzen Bullrush ab. Optional lässt sich pro Abend der
+   **Zufalls-Bullrush** einschalten (🐂-Toggle): Dann kann jede normale Runde
+   überraschend zum Bullrush werden – höchstens einmal alle 3,5 Stunden pro
+   Abend (Standard-Chance 15 %; über die Env-Vars `BULLRUSH_CHANCE` und
+   `BULLRUSH_COOLDOWN` einstellbar).
 4. **Statistik** unter `/statistics/<code>`: Runden und Spielzeit pro Spieler,
    Rundenliste mit Modus und Dauer – auch Tage später noch abrufbar.
 
@@ -85,6 +92,7 @@ Abende, Spieler, Runden und Statistik:
 - `POST /api/evening/<code>/players` - Spieler hinzufügen (`{"name": "..."}`)
 - `DELETE /api/evening/<code>/players/<id>` - Spieler entfernen (bleibt in alten Runden erhalten)
 - `POST /api/evening/<code>/draw` - Sitzpositionen auslosen (1 = Startbecher)
+- `POST /api/evening/<code>/settings` - Abend-Einstellungen (`{"random_bullrush": true}`)
 - `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
 - `POST /api/evening/<code>/round/end` - Laufende Runde beenden
 - `GET /api/evening/<code>/statistics` - Abend-Statistik (Spieler-Auswertung, Rundenliste)
@@ -117,6 +125,8 @@ konfigurierbar:
 - `start_position` - Einstiegspunkt in der Audio-Datei (Sekunden, 0 = von vorn)
 - `time_limit` - Runde endet automatisch nach X Sekunden (`None` = kein Limit;
   Pause hält das Limit an)
+- `round_count` - Anzahl direkt aufeinanderfolgender Runden (1 = normale
+  Einzelrunde, Bullrush nutzt 3)
 - `audio` - Audio-Datei mit `intro_end`/`loop_start`/`loop_end` (eigene Datei pro
   Modus möglich; `DEFAULT_AUDIO` nutzt `Cage-Loop-concat.ogg`)
 
