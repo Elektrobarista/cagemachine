@@ -26,6 +26,9 @@ Die Wiedergabe nutzt eine einzige zusammengeschnittene Datei:
 
 - `static/Cage-Loop-concat.ogg` - Intro + Loop in einer Datei
 
+**Die Audio-Datei liegt nicht im Repository** (zu groß) – nach einem frischen
+Clone muss sie von Hand nach `static/` kopiert werden, sonst startet keine Musik.
+
 Die Loop-Punkte sind in `game_manager.py` (`DEFAULT_AUDIO`) auf diese Datei abgestimmt. Wird die Datei ausgetauscht, müssen die Timecodes dort angepasst werden.
 
 ## Verwendung

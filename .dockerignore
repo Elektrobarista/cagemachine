@@ -33,6 +33,16 @@ LICENSE
 test_*.py
 *_test.py
 
+# Audio (kommt per Bind-Mount in den Container, nicht ins Image)
+static/*.ogg
+
+# Laufzeitdaten (SQLite über Volume gemountet)
+data/
+
+# Lokale Notizen / Tooling
+KONZEPT.md
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
