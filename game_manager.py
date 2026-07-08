@@ -53,6 +53,9 @@ BULLRUSH_CHANCE = float(os.getenv("BULLRUSH_CHANCE", "0.15"))
 # erneut zuschlagen (Sekunden, per Env-Var übersteuerbar)
 BULLRUSH_COOLDOWN = float(os.getenv("BULLRUSH_COOLDOWN", str(3.5 * 60 * 60)))
 
+# Boolesche Abend-Einstellungen (Spaltennamen in der evening-Tabelle)
+EVENING_SETTINGS = ("random_bullrush",)
+
 # Länger kann eine echte Runde nicht dauern; verwaiste Runden (Browser
 # geschlossen statt Stop) bekommen beim Aufräumen keine Dauer, damit sie
 # die Zeitstatistik nicht verfälschen
@@ -143,12 +146,15 @@ class GameManager:
             "open_round": dict(open_round) if open_round else None,
         }
 
-    def set_random_bullrush(self, code, enabled):
-        """Schaltet den Zufalls-Bullrush für einen Abend an/aus"""
+    def set_setting(self, code, setting, enabled):
+        """Schaltet eine boolesche Abend-Einstellung an/aus"""
+        if setting not in EVENING_SETTINGS:
+            raise ValueError(f"Unbekannte Einstellung '{setting}'")
         evening = self.get_evening(code)
         with db.connect() as conn:
+            # setting ist gegen die Allowlist geprüft, daher sicher im SQL
             conn.execute(
-                "UPDATE evening SET random_bullrush = ? WHERE code = ?",
+                f"UPDATE evening SET {setting} = ? WHERE code = ?",
                 (1 if enabled else 0, evening["code"]),
             )
         return self.get_evening(code)
@@ -254,6 +260,22 @@ class GameManager:
 
             # Läuft laut DB noch eine Runde, wird sie automatisch geschlossen
             self._close_open_rounds(conn, evening_id, now)
+
+            # Die Sitzpositionen werden vor jedem Rundenstart neu ausgelost
+            # (auch Bullrush-Folgerunden), damit der Runden-Snapshot bereits
+            # die neue Ordnung enthält
+            players = evening["players"]
+            if len(players) >= 2:
+                player_ids = [p["id"] for p in players]
+                random.shuffle(player_ids)
+                new_positions = {pid: pos for pos, pid in enumerate(player_ids, start=1)}
+                for player_id, position in new_positions.items():
+                    conn.execute(
+                        "UPDATE player SET position = ? WHERE id = ?",
+                        (position, player_id),
+                    )
+                for player in players:
+                    player["position"] = new_positions[player["id"]]
 
             round_id = str(uuid.uuid4())
             conn.execute(

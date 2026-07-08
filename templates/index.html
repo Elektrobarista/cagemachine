@@ -1010,24 +1010,28 @@
     });
     btnAddPlayer.addEventListener("click", addPlayer);
     btnDraw.addEventListener("click", drawPositions);
-    const randomBullrushToggle = document.getElementById("randomBullrushToggle");
-    randomBullrushToggle.addEventListener("change", async () => {
-      if (!currentCode) return;
-      const enabled = randomBullrushToggle.checked;
-      randomBullrushToggle.disabled = true; // keine parallelen Requests
-      try {
-        const data = await apiCall(`/api/evening/${currentCode}/settings`, "POST",
-          { random_bullrush: enabled });
-        if (data.evening) {
-          setEvening(data.evening);
-        } else {
-          randomBullrushToggle.checked = !enabled; // bei Fehler zurückdrehen
-          if (data.error) alert(data.error);
+    // Abend-Einstellungs-Toggles: Checkbox <-> Settings-Endpoint
+    function bindSettingToggle(toggle, settingKey) {
+      toggle.addEventListener("change", async () => {
+        if (!currentCode) return;
+        const enabled = toggle.checked;
+        toggle.disabled = true; // keine parallelen Requests
+        try {
+          const data = await apiCall(`/api/evening/${currentCode}/settings`, "POST",
+            { [settingKey]: enabled });
+          if (data.evening) {
+            setEvening(data.evening);
+          } else {
+            toggle.checked = !enabled; // bei Fehler zurückdrehen
+            if (data.error) alert(data.error);
+          }
+        } finally {
+          toggle.disabled = false;
         }
-      } finally {
-        randomBullrushToggle.disabled = false;
-      }
-    });
+      });
+    }
+    const randomBullrushToggle = document.getElementById("randomBullrushToggle");
+    bindSettingToggle(randomBullrushToggle, "random_bullrush");
     playerNameInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         addPlayer();

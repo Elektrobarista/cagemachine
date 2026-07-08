@@ -151,6 +151,32 @@ def test_random_bullrush():
         print("  ✓ Toggle und Validierung (Trigger-Test übersprungen, BULLRUSH_CHANCE nicht 1.0)")
 
 
+def test_draw_on_start():
+    print("\n[TEST 10] Auslosung bei jedem Rundenstart...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Dora", "Emil", "Fritz", "Gerd"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+
+    # Jeder Rundenstart lost aus: Positionen sind eine Permutation von 1..4
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    players = r.json()["evening"]["players"]
+    assert sorted(p["position"] for p in players) == [1, 2, 3, 4], \
+        "Rundenstart sollte alle Positionen auslosen"
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    # Auch der nächste Start lost (wieder vollständige Permutation)
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    assert sorted(p["position"] for p in r.json()["evening"]["players"]) == [1, 2, 3, 4]
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    # Snapshot der Runde trägt die neu gelosten Positionen
+    stats = requests.get(f"{BASE_URL}/api/evening/{code}/statistics").json()
+    assert stats["rounds"][-1]["player_count"] == 4
+    positions = [p["last_position"] for p in stats["players"]]
+    assert sorted(positions) == [1, 2, 3, 4]
+    print("  ✓ Auslosung bei jedem Rundenstart, Snapshot-Positionen")
+
+
 def test_statistics(code):
     print("\n[TEST 7] Abend-Statistik...")
     r = requests.get(f"{BASE_URL}/api/evening/{code}/statistics")
@@ -185,4 +211,5 @@ if __name__ == "__main__":
     test_statistics(code)
     test_modes()
     test_random_bullrush()
+    test_draw_on_start()
     print("\nAlle Tests bestanden ✓")

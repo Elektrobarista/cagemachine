@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify, request
-from game_manager import GameManager, EveningNotFound, GAME_MODES
+from game_manager import GameManager, EveningNotFound, GAME_MODES, EVENING_SETTINGS
 from utils import format_duration
 
 app = Flask(__name__)
@@ -110,14 +110,18 @@ def remove_player(code, player_id):
 
 @app.route("/api/evening/<code>/settings", methods=["POST"])
 def update_settings(code):
-    """Abend-Einstellungen ändern (bisher nur random_bullrush)"""
+    """Abend-Einstellungen ändern (random_bullrush, draw_on_start)"""
     try:
         data = request.get_json(silent=True) or {}
-        enabled = data.get("random_bullrush")
-        if not isinstance(enabled, bool):
-            return jsonify({"error": "random_bullrush muss true oder false sein"}), 400
+        requested = {key: data[key] for key in EVENING_SETTINGS if key in data}
+        if not requested:
+            return jsonify({"error": f"Erwartet eine Einstellung aus: {', '.join(EVENING_SETTINGS)}"}), 400
+        for key, enabled in requested.items():
+            if not isinstance(enabled, bool):
+                return jsonify({"error": f"{key} muss true oder false sein"}), 400
 
-        evening = game_manager.set_random_bullrush(code, enabled)
+        for key, enabled in requested.items():
+            evening = game_manager.set_setting(code, key, enabled)
         return jsonify({"evening": evening}), 200
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404
