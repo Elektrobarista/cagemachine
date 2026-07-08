@@ -107,6 +107,31 @@
       background: #f8f9fa;
     }
 
+    /* Entfernte Spieler: dezent ausgegraut, ohne Label */
+    .games-table tr.inactive td {
+      color: #b5b5b5;
+    }
+
+    /* Sortierbare Spaltenköpfe */
+    .games-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .games-table th.sortable:hover {
+      color: #667eea;
+    }
+
+    /* Längste Runde: dezent golden hinterlegt */
+    .games-table tr.longest td {
+      background: #fdf6e0;
+    }
+
+    .games-table tr.longest:hover {
+      background: #fdf6e0;
+    }
+
 
     .empty-state {
       text-align: center;
@@ -260,6 +285,69 @@
       document.getElementById("longestRound").textContent =
         data.summary.longest_round !== null ? data.summary.longest_round_formatted : "–";
 
+      lastData = data;
+      renderTables();
+    }
+
+    // Sortierbare Tabellen: Klick auf den Spaltenkopf sortiert aufsteigend,
+    // ein zweiter Klick dreht die Richtung
+    let lastData = null;
+    const sortState = {
+      players: { key: null, dir: 1 },
+      rounds: { key: null, dir: 1 },
+    };
+
+    const PLAYER_COLUMNS = [
+      { key: "name", label: "Spieler", value: p => p.name.toLowerCase() },
+      { key: "rounds", label: "Runden", value: p => p.rounds_played },
+      { key: "time", label: "Spielzeit", value: p => p.total_duration },
+    ];
+
+    const ROUND_COLUMNS = [
+      { key: "started", label: "Gestartet am", value: r => r.started_at },
+      { key: "mode", label: "Modus", value: r => (modeLabels[r.mode] || r.mode).toLowerCase() },
+      // Laufende Runde zählt als längste, Runden ohne Dauer ans Ende
+      { key: "duration", label: "Dauer", value: r => r.ended_at === null ? Infinity : (r.duration ?? -1) },
+      { key: "players", label: "Mitspieler", value: r => r.player_count },
+    ];
+
+    function sortedRows(rows, columns, state) {
+      if (!state.key) return rows;
+      const col = columns.find(c => c.key === state.key);
+      return [...rows].sort((a, b) => {
+        const va = col.value(a);
+        const vb = col.value(b);
+        return (va < vb ? -1 : va > vb ? 1 : 0) * state.dir;
+      });
+    }
+
+    function headerRow(columns, state, tableName) {
+      const cells = columns.map(c => {
+        const arrow = state.key === c.key ? (state.dir === 1 ? " ▲" : " ▼") : "";
+        return `<th class="sortable" data-table="${tableName}" data-key="${c.key}">${c.label}${arrow}</th>`;
+      });
+      return `<tr>${cells.join("")}</tr>`;
+    }
+
+    function bindSortHandlers(container) {
+      container.querySelectorAll("th.sortable").forEach(th => {
+        th.addEventListener("click", () => {
+          const state = sortState[th.dataset.table];
+          if (state.key === th.dataset.key) {
+            state.dir = -state.dir;
+          } else {
+            state.key = th.dataset.key;
+            state.dir = 1;
+          }
+          renderTables();
+        });
+      });
+    }
+
+    function renderTables() {
+      if (!lastData) return;
+      const data = lastData;
+
       // Spieler-Tabelle
       if (!data.players.length) {
         playersContainer.innerHTML = `<div class="empty-state">
@@ -267,29 +355,22 @@
           <div class="empty-state-text">Noch keine Spieler</div>
         </div>`;
       } else {
-        let html = `
-          <table class="games-table">
-            <thead>
-              <tr><th>Spieler</th><th>Runden</th><th>Spielzeit</th><th>Position</th></tr>
-            </thead>
-            <tbody>
-        `;
-        data.players.forEach(p => {
-          const name = esc(p.name) + (p.active ? "" : " <span style='color:#999;'>(ausgeschieden)</span>");
-          // Startbecher werden pro Runde neu gelost – die Sitznummer allein
-          // sagt nichts mehr über den Becher aus
-          const pos = p.last_position === null ? "–" : p.last_position;
-          html += `<tr>
-            <td>${name}</td>
+        let html = `<table class="games-table"><thead>`
+          + headerRow(PLAYER_COLUMNS, sortState.players, "players")
+          + `</thead><tbody>`;
+        sortedRows(data.players, PLAYER_COLUMNS, sortState.players).forEach(p => {
+          // Entfernte Spieler nur ausgrauen – sie können jederzeit zurückkommen
+          html += `<tr class="${p.active ? "" : "inactive"}">
+            <td>${esc(p.name)}</td>
             <td>${p.rounds_played}</td>
             <td>${p.total_duration_formatted}</td>
-            <td>${pos}</td>
           </tr>`;
         });
         playersContainer.innerHTML = html + "</tbody></table>";
+        bindSortHandlers(playersContainer);
       }
 
-      // Runden-Tabelle
+      // Runden-Tabelle (unsortiert: neueste zuerst)
       if (!data.rounds.length) {
         roundsContainer.innerHTML = `<div class="empty-state">
           <div class="empty-state-icon">🎵</div>
@@ -297,24 +378,26 @@
           <p style="margin-top: 12px; color: #999;">Starte die Musik, um eine Runde zu tracken.</p>
         </div>`;
       } else {
-        let html = `
-          <table class="games-table">
-            <thead>
-              <tr><th>Gestartet am</th><th>Modus</th><th>Dauer</th><th>Mitspieler</th></tr>
-            </thead>
-            <tbody>
-        `;
-        // Neueste zuerst
-        [...data.rounds].reverse().forEach(r => {
+        let html = `<table class="games-table"><thead>`
+          + headerRow(ROUND_COLUMNS, sortState.rounds, "rounds")
+          + `</thead><tbody>`;
+        const longest = data.summary.longest_round;
+        const rows = sortState.rounds.key
+          ? sortedRows(data.rounds, ROUND_COLUMNS, sortState.rounds)
+          : [...data.rounds].reverse();
+        rows.forEach(r => {
           const running = r.ended_at === null;
-          html += `<tr>
+          // Die längste Runde wird dezent hervorgehoben
+          const isLongest = longest !== null && r.duration === longest;
+          html += `<tr class="${isLongest ? "longest" : ""}">
             <td>${formatDateTime(r.started_at)}</td>
             <td>${esc(modeLabels[r.mode] || r.mode)}</td>
-            <td>${running ? "<span style='color:#10b981;font-weight:600;'>läuft …</span>" : r.duration_formatted}</td>
+            <td>${running ? "<span style='color:#10b981;font-weight:600;'>läuft …</span>" : r.duration_formatted + (isLongest ? " ⏱️" : "")}</td>
             <td>${r.player_count}</td>
           </tr>`;
         });
         roundsContainer.innerHTML = html + "</tbody></table>";
+        bindSortHandlers(roundsContainer);
       }
     }
 

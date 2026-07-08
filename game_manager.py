@@ -182,11 +182,25 @@ class GameManager:
             evening_id = conn.execute(
                 "SELECT id FROM evening WHERE code = ?", (evening["code"],)
             ).fetchone()["id"]
-            conn.execute(
-                "INSERT INTO player (id, evening_id, name, position, active, added_at)"
-                " VALUES (?, ?, ?, ?, 1, ?)",
-                (str(uuid.uuid4()), evening_id, name, position, _now()),
-            )
+
+            # Wer den Abend schon mal mitgespielt hat, wird reaktiviert statt
+            # dupliziert – die bisherige Statistik läuft dann weiter
+            removed = conn.execute(
+                "SELECT id FROM player WHERE evening_id = ? AND active = 0"
+                " AND lower(name) = lower(?) ORDER BY added_at DESC LIMIT 1",
+                (evening_id, name),
+            ).fetchone()
+            if removed:
+                conn.execute(
+                    "UPDATE player SET active = 1, position = ? WHERE id = ?",
+                    (position, removed["id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO player (id, evening_id, name, position, active, added_at)"
+                    " VALUES (?, ?, ?, ?, 1, ?)",
+                    (str(uuid.uuid4()), evening_id, name, position, _now()),
+                )
         return self.get_evening(code)
 
     def draw_positions(self, code):

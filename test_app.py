@@ -191,6 +191,39 @@ def test_draw_on_start():
     print("  ✓ Auslosung bei jedem Rundenstart, Snapshot-Positionen")
 
 
+def test_readd_player():
+    print("\n[TEST 11] Entfernte Spieler wieder hinzufügen...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Rita", "Sven", "Tom"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+
+    # Eine Runde spielen, damit Rita Statistik hat
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    rita = next(p for p in players if p["name"] == "Rita")
+    requests.delete(f"{BASE_URL}/api/evening/{code}/players/{rita['id']}")
+
+    stats = requests.get(f"{BASE_URL}/api/evening/{code}/statistics").json()
+    rita_stats = next(p for p in stats["players"] if p["name"] == "Rita")
+    assert rita_stats["active"] is False, "Entfernte Spielerin sollte inaktiv sein"
+
+    # Wieder hinzufügen (andere Schreibweise): reaktiviert dieselbe Spielerin
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": "rita"})
+    assert r.status_code == 200
+    players = r.json()["evening"]["players"]
+    readded = next(p for p in players if p["name"].lower() == "rita")
+    assert readded["id"] == rita["id"], "Reaktivierung statt neuer Spielerin erwartet"
+
+    stats = requests.get(f"{BASE_URL}/api/evening/{code}/statistics").json()
+    ritas = [p for p in stats["players"] if p["name"].lower() == "rita"]
+    assert len(ritas) == 1, "Es darf nur eine Rita in der Statistik geben"
+    assert ritas[0]["active"] is True and ritas[0]["rounds_played"] == 1, \
+        "Statistik muss nach Reaktivierung weiterlaufen"
+    print("  ✓ Entfernen + Wieder-Hinzufügen reaktiviert dieselbe Spielerin samt Statistik")
+
+
 def test_statistics(code):
     print("\n[TEST 7] Abend-Statistik...")
     r = requests.get(f"{BASE_URL}/api/evening/{code}/statistics")
@@ -226,4 +259,5 @@ if __name__ == "__main__":
     test_modes()
     test_random_bullrush()
     test_draw_on_start()
+    test_readd_player()
     print("\nAlle Tests bestanden ✓")
