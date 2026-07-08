@@ -15,23 +15,16 @@ from utils import format_duration
 
 app = Flask(__name__)
 
-# Hinter einem Reverse-Proxy (nginx): die vom Proxy gesetzten Forwarded-Header
-# auswerten. Dadurch liefert request.host_url die echte öffentliche Adresse
-# (korrekte Teil-Links/QR) und request.remote_addr die echte Client-IP
-# (korrektes Rate-Limiting statt "alles kommt von nginx").
-# PROXY_HOPS = Anzahl vertrauenswürdiger Proxies davor (Standard 1).
+# Forwarded-Header hinter nginx auswerten (host_url + Client-IP)
 _proxy_hops = int(os.getenv("PROXY_HOPS", "1"))
 app.wsgi_app = ProxyFix(
     app.wsgi_app,
     x_for=_proxy_hops, x_proto=_proxy_hops, x_host=_proxy_hops,
 )
 
-# GameManager-Instanz erstellen (initialisiert die SQLite-DB)
 game_manager = GameManager()
 
-# Rate-Limiting pro IP. Der Abend-Code ist der einzige Zugangsschutz; ohne
-# Drosselung ließe sich der 4-Zeichen-Raum durchprobieren (Enumeration).
-# In-Memory-Speicher genügt für die Single-Prozess-Instanz.
+# Rate-Limiting pro IP gegen Code-Enumeration
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
@@ -39,7 +32,6 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-# Codes probieren = teuer machen; Limit per Env-Var übersteuerbar (Tests: hoch)
 CODE_LOOKUP_LIMIT = os.getenv("CODE_LOOKUP_LIMIT", "20 per minute")
 
 VISITOR_COOKIE = "cagemachine_visitor"
@@ -47,13 +39,12 @@ VISITOR_COOKIE = "cagemachine_visitor"
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
-    """Rate-Limit als JSON, damit das Frontend eine saubere Fehlermeldung bekommt"""
+    """Rate-Limit als JSON statt HTML"""
     return jsonify({"error": "Zu viele Anfragen – bitte kurz warten."}), 429
 
 
 def _visitor_response(payload, evening_code):
-    """Antwort mit Geräte-Cookie; merkt den Abend für die Übersicht vor.
-    Das Cookie identifiziert nur das Gerät – der Abend-Code bleibt der Schlüssel."""
+    """Antwort mit Geräte-Cookie; merkt den Abend für die Übersicht vor"""
     visitor_id = request.cookies.get(VISITOR_COOKIE) or str(uuid.uuid4())
     game_manager.record_access(evening_code, visitor_id)
     response = make_response(jsonify(payload), 200)
@@ -130,9 +121,7 @@ def delete_evening(code):
 @app.route("/api/evening/<code>/qr", methods=["GET"])
 @limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def evening_qr(code):
-    """QR-Code (SVG) des teilbaren Abend-Links, damit Mitspieler beitreten können.
-    Der Link nutzt request.host_url – also genau die Adresse, über die der Client
-    den Server erreicht (im LAN die richtige, teilbare Adresse)."""
+    """QR-Code (SVG) des teilbaren Abend-Links"""
     try:
         evening = game_manager.get_evening(code)
         link = f"{request.host_url}abend/{evening['code']}"
@@ -289,7 +278,6 @@ def get_evening_statistics(code):
         for r in stats["rounds"]:
             r["duration_formatted"] = format_duration(r["duration"]) if r["duration"] is not None else "–"
 
-        # Auch der Statistik-Aufruf per Code zählt als Geräte-Zugriff
         return _visitor_response(stats, stats["evening"]["code"])
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404
@@ -351,7 +339,7 @@ def export_statistics(code):
 
 if __name__ == "__main__":
     import os
-    # In Docker auf 0.0.0.0 laufen lassen, lokal auf 127.0.0.1
+    # Nur für lokale Entwicklung; im Container läuft waitress
     host = os.getenv("FLASK_HOST", "127.0.0.1")
     port = int(os.getenv("FLASK_PORT", "3000"))
     app.run(host=host, port=port, debug=False)

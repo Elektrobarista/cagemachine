@@ -3,15 +3,14 @@ services:
     build: .
     image: cagemachine
     container_name: cagemachine
+    init: true   # tini als PID 1 (Signale + Zombie-Reaping)
     ports:
       - "3000:3000"
     volumes:
-      # Optional: Mount static files wenn du sie ändern willst ohne Rebuild
+      # Pflicht fürs Audio: ogg muss vor dem Start in ./static/ liegen (README)
       - ./static:/app/static:ro
-      # SQLite-Daten (Abende, Spieler, Runden) über Container-Neustarts hinweg
-      - ./data:/app/data
+      - ./data:/app/data   # SQLite-Persistenz
     environment:
-      - FLASK_ENV=production
       - FLASK_HOST=0.0.0.0
       - FLASK_PORT=3000
     restart: unless-stopped

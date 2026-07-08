@@ -1,29 +1,16 @@
-# Verwende Ubuntu mit Python
-FROM ubuntu:22.04
+FROM python:3.12-slim
 
-# Installiere Python und Basis-Tools
-RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Setze Arbeitsverzeichnis
 WORKDIR /app
 
-# Kopiere requirements.txt und installiere Python-Abhängigkeiten
+ENV PYTHONUNBUFFERED=1
+
+# Dependencies zuerst (Layer-Caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Kopiere Anwendungsdateien
 COPY . .
 
-# Exponiere Port 3000
 EXPOSE 3000
 
-# Setze Umgebungsvariable für Flask
-ENV FLASK_APP=app.py
-ENV PYTHONUNBUFFERED=1
-
-# Starte die Anwendung
-CMD ["python3", "app.py"]
-
+# waitress (Produktionsserver); sh -c für FLASK_PORT-Expansion
+CMD ["sh", "-c", "exec waitress-serve --host=0.0.0.0 --port=${FLASK_PORT:-3000} app:app"]

@@ -46,20 +46,14 @@ GAME_MODES = {
     },
 }
 
-# Chance, dass ein normaler Rundenstart zum Bullrush wird, wenn der Abend
-# "Zufalls-Bullrush" aktiviert hat (per Env-Var übersteuerbar, z. B. 1.0 in Tests)
+# Zufalls-Bullrush: Trigger-Chance und Cooldown (Env-Var überschreibbar)
 BULLRUSH_CHANCE = float(os.getenv("BULLRUSH_CHANCE", "0.15"))
-
-# Frühestens nach dieser Zeit darf der Zufalls-Bullrush am selben Abend
-# erneut zuschlagen (Sekunden, per Env-Var übersteuerbar)
 BULLRUSH_COOLDOWN = float(os.getenv("BULLRUSH_COOLDOWN", str(3.5 * 60 * 60)))
 
-# Boolesche Abend-Einstellungen (Spaltennamen in der evening-Tabelle)
+# Boolesche Abend-Einstellungen (Spaltennamen in evening)
 EVENING_SETTINGS = ("random_bullrush",)
 
-# Länger kann eine echte Runde nicht dauern; verwaiste Runden (Browser
-# geschlossen statt Stop) bekommen beim Aufräumen keine Dauer, damit sie
-# die Zeitstatistik nicht verfälschen
+# Verwaiste Runden darüber gelten als ungültig (keine Dauer)
 MAX_ROUND_DURATION = 2 * 60 * 60  # 2 Stunden
 
 
@@ -76,8 +70,7 @@ def _duration_seconds(start_iso, end_iso):
 
 
 def _generate_code():
-    # secrets statt random: der Code ist der einzige Zugangsschutz eines Abends,
-    # darf also nicht aus einem vorhersagbaren PRNG-Zustand ableitbar sein
+    # secrets statt random (Code nicht aus PRNG-Zustand vorhersagbar)
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
 
 
@@ -256,8 +249,7 @@ class GameManager:
                 "SELECT id FROM evening WHERE code = ?", (evening["code"],)
             ).fetchone()["id"]
 
-            # Wer den Abend schon mal mitgespielt hat, wird reaktiviert statt
-            # dupliziert – die bisherige Statistik läuft dann weiter
+            # Bereits mitgespielte Spieler reaktivieren statt duplizieren
             removed = conn.execute(
                 "SELECT id FROM player WHERE evening_id = ? AND active = 0"
                 " AND lower(name) = lower(?) ORDER BY added_at DESC LIMIT 1",
@@ -335,9 +327,7 @@ class GameManager:
             ).fetchone()
             evening_id = row["id"]
 
-            # Zufalls-Bullrush: normale Einzelrunden können überraschend zum
-            # Bullrush werden – höchstens einmal pro Cooldown und nie bei
-            # einem manuell gestarteten Bullrush
+            # Zufalls-Bullrush: Einzelrunde ggf. zum Bullrush machen (1×/Cooldown)
             cooldown_over = (
                 row["last_bullrush_at"] is None
                 or _duration_seconds(row["last_bullrush_at"], now) >= BULLRUSH_COOLDOWN
@@ -357,9 +347,7 @@ class GameManager:
             # Läuft laut DB noch eine Runde, wird sie automatisch geschlossen
             self._close_open_rounds(conn, evening_id, now)
 
-            # Die Sitzpositionen werden vor jedem Rundenstart neu ausgelost
-            # (auch Bullrush-Folgerunden), damit der Runden-Snapshot bereits
-            # die neue Ordnung enthält
+            # Sitzpositionen vor jedem Rundenstart neu auslosen
             players = evening["players"]
             if len(players) >= 2:
                 player_ids = [p["id"] for p in players]

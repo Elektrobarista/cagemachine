@@ -385,8 +385,7 @@
       renderTables();
     }
 
-    // Ohne Code: Übersicht der Abende, die dieses Gerät geöffnet hat
-    // (serverseitig übers Geräte-Cookie gefiltert – fremde Codes bleiben geheim)
+    // Ohne Code: Abende dieses Geräts (übers Cookie gefiltert)
     async function renderEveningOverview() {
       document.getElementById("statsOverview").style.display = "none";
       document.getElementById("highlights").style.display = "none";
@@ -464,8 +463,7 @@
       el.style.display = "grid";
     }
 
-    // Sortierbare Tabellen: Klick auf den Spaltenkopf sortiert aufsteigend,
-    // ein zweiter Klick dreht die Richtung
+    // Sortierbare Tabellen (Klick = auf, zweiter Klick = ab)
     let lastData = null;
     const sortState = {
       players: { key: null, dir: 1 },

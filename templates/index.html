@@ -733,9 +733,7 @@
 
       stopSource() {
         if (this.source) {
-          // onended lösen, sonst startet source.stop() über den Handler
-          // der Intro-Quelle noch den Loop (scheduleLoop)
-          this.source.onended = null;
+          this.source.onended = null;   // sonst triggert stop() den Loop
           try { this.source.stop(); } catch {}
           this.source.disconnect();
         }
@@ -928,8 +926,7 @@
     let currentPosition = 0;
     let totalDuration = 0;
 
-    // Mehrfach-Runden (Bullrush): total > 1, solange ein Bullrush läuft;
-    // pendingStart ist das Wartefenster vor der nächsten Auto-Runde
+    // Mehrfach-Runden (Bullrush); pendingStart = Wartefenster vor Auto-Runde
     const multiRound = { total: 0, current: 0, modeId: null, pendingStart: null };
 
     // API-Call Helper
@@ -1220,9 +1217,7 @@
       renderTableView(players, currentEvening.open_round);
     }
 
-    // Tisch-Ansicht: Chips im Oval, Position 1 unten, weiter im Uhrzeigersinn
-    // (Laufrichtung der Becher). Chips bleiben pro Spieler erhalten, damit
-    // Positionswechsel per CSS-Transition animiert werden.
+    // Tisch-Ansicht: Chips im Oval; pro Spieler erhalten für CSS-Transition
     const tableView = document.getElementById("tableView");
     const seatChips = {}; // playerId -> Chip-Element
     let tableAngleOffset = 0;      // Drehwinkel des Nummern-Rads
@@ -1243,15 +1238,12 @@
       tableView.style.display = "block";
 
       const n = seated.length;
-      // Startbecher gehören zur laufenden Runde: Becher 1 ist immer Position 1,
-      // Becher 2 wird pro Runde mit Mindestabstand gelost
+      // Becher 1 = Position 1, Becher 2 = start_pos2 der Runde
       const startPos1 = openRound ? 1 : null;
       const startPos2 = openRound ? openRound.start_pos2 : null;
       const seen = new Set();
 
-      // Das Nummern-Rad wird pro Runde zufällig gedreht (stabil aus der
-      // Runden-ID abgeleitet), damit Position 1 nicht immer unten sitzt;
-      // die Nummern laufen von dort im Uhrzeigersinn
+      // Nummern-Rad pro Runde zufällig drehen (stabil aus der Runden-ID)
       if (openRound && openRound.id !== tableAngleRoundId) {
         tableAngleRoundId = openRound.id;
         let h = 0;
@@ -1335,8 +1327,7 @@
     }
 
     function updateButtonStates() {
-      // Im Wartefenster vor der nächsten Bullrush-Runde gilt der Bullrush
-      // als "läuft": Stop bleibt aktiv (Doppel-Stop), Start/Modus gesperrt
+      // Im Bullrush-Wartefenster: Stop aktiv (Doppel-Stop), Start/Modus gesperrt
       const pendingBullrush = multiRound.pendingStart !== null;
 
       // Modus lässt sich nur vor dem Start wechseln
@@ -1475,8 +1466,7 @@
         if (data.evening) {
           setEvening(data.evening);
 
-          // Zufalls-Bullrush: der Server kann eine normale Runde zum
-          // Bullrush machen – erkennbar am abweichenden Modus der Antwort
+          // Server-getriggerter Bullrush: Modus der Antwort weicht ab
           const openRound = data.evening.open_round;
           if (action === "start" && openRound && openRound.mode !== mode) {
             const triggered = gameModes.find(m => m.id === openRound.mode);
@@ -1523,9 +1513,7 @@
       setTimeout(() => { bullrushBanner.style.display = "none"; }, 3000);
     }
 
-    // Wendet die Modus-Config an und startet die Musik samt roundTimer.
-    // Gemeinsame Basis für manuellen Start und Bullrush-Folgerunden;
-    // liefert false, wenn das Audio nicht startet (dann keine Runde tracken).
+    // Modus-Config anwenden + Musik starten; false wenn Audio nicht startet
     async function startModeAudio(mode, errorMessage) {
       if (mode && mode.audio) {
         clientAudio.applyConfig(mode.audio);
@@ -1562,9 +1550,7 @@
       await trackRound("start", multiRound.modeId);
     }
 
-    // Nach dem Laden eines Abends: läuft serverseitig noch eine Runde eines
-    // Multi-Runden-Modus (z. B. Reload mitten im Bullrush), den lokalen
-    // Zustand daraus rekonstruieren, damit Zähler und Auto-Restart erhalten bleiben
+    // Bullrush-Zustand nach Reload aus der offenen Runde rekonstruieren
     async function restoreMultiRound(evening) {
       const openRound = evening.open_round;
       if (!openRound || multiRound.total > 1) return;
@@ -1575,9 +1561,7 @@
       multiRound.current = 1;
       multiRound.modeId = mode.id;
 
-      // Rundennummer schätzen: aufeinanderfolgende Runden desselben Modus am
-      // Ende der Rundenliste (Modulo fängt direkt hintereinander gespielte
-      // Bullrushes ab; Heuristik, bei abgebrochenen Bullrushes ggf. ungenau)
+      // Rundennummer aus der Modus-Serie am Ende der Rundenliste schätzen
       const data = await apiCall(`/api/evening/${evening.code}/statistics`, "GET");
       if (data.rounds) {
         let streak = 0;
@@ -1606,9 +1590,7 @@
 
     btnStart.addEventListener("click", async () => {
       const wasPaused = clientAudio.state === "paused";
-      // Steht ein rekonstruierter Bullrush im Raum (Reload mitten im Bullrush:
-      // multiRound gesetzt, Musik aber gestoppt), setzt Start die laufende
-      // Bullrush-Runde fort statt einen neuen Durchgang zu beginnen
+      // Rekonstruierter Bullrush (nach Reload): Start setzt ihn fort
       const resumingMultiRound = !wasPaused && multiRound.total > 1;
       let startedMode = selectedMode;
       if (wasPaused) {
@@ -1652,8 +1634,7 @@
     });
 
     btnStop.addEventListener("click", async () => {
-      // Doppel-Stop im Wartefenster bricht den ganzen Bullrush ab
-      // (die nächste Runde wurde noch nicht gestartet, es entsteht keine Leer-Runde)
+      // Doppel-Stop im Wartefenster bricht den Bullrush ab
       if (multiRound.pendingStart) {
         resetMultiRound();
         updateStatus();
@@ -1665,21 +1646,18 @@
       updateStatus();
       await trackRound("end");
 
-      // Bullrush: nächste Runde nach kurzem Wartefenster automatisch starten;
-      // das Fenster ist zugleich die Chance für den Doppel-Stop
+      // Bullrush: nächste Runde nach kurzem Wartefenster (= Doppel-Stop-Chance)
       if (multiRound.total > 1 && multiRound.current < multiRound.total) {
         multiRound.pendingStart = setTimeout(startNextMultiRound, 1500);
-        updateButtonStates(); // Stop bleibt für den Doppel-Stop aktiv
+        updateButtonStates();
       } else {
         resetMultiRound();
       }
     });
 
     const headstartPlay = async (seconds) => {
-      // Debug-Funktion: springt nur in der Audio-Datei, startet KEINE Runde.
-      // Die Sprungziele beziehen sich auf die Standard-Datei, daher immer
-      // deren Config anwenden (unabhängig vom gewählten Modus).
-      resetMultiRound(); // kein Auto-Start einer Bullrush-Runde über den Debug-Sound
+      // Debug: springt nur im Audio, startet keine Runde
+      resetMultiRound();
       clientAudio.applyConfig(DEFAULT_AUDIO_CONFIG);
       currentPosition = seconds;
       timeDisplay.textContent = formatTime(currentPosition);

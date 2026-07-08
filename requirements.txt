@@ -6,3 +6,7 @@ flask-limiter>=3.5.0
 
 # QR-Code (SVG, serverseitig – kein Pillow nötig)
 qrcode>=7.0
+
+# Produktions-WSGI-Server (single-process/multi-threaded, passt zum
+# In-Memory-Rate-Limiter)
+waitress>=3.0

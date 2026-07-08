@@ -81,8 +81,7 @@ def init_db():
     """Legt das Schema an, falls es noch nicht existiert"""
     with connect() as conn:
         conn.executescript(SCHEMA)
-        # Mini-Migration: Spalten, die nach dem ersten Release dazukamen
-        # (CREATE TABLE IF NOT EXISTS fasst bestehende Tabellen nicht an)
+        # Mini-Migration: nachträglich ergänzte Spalten
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(evening)")}
         if "random_bullrush" not in columns:
             conn.execute(
