@@ -317,6 +317,26 @@ def test_csv_export():
     print("  ✓ ZIP mit spieler_/runden_-CSV, Inhalte korrekt, 404 bei Unbekannt")
 
 
+def test_delete_evening():
+    print("\n[TEST 15] Abend löschen (inkl. aller Daten)...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Zoe", "Yann"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+    # Laufende Runde offen lassen – Löschen muss trotzdem gehen
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+
+    r = requests.delete(f"{BASE_URL}/api/evening/{code}")
+    assert r.status_code == 200 and r.json().get("deleted") is True
+
+    # Abend und alle abhängigen Daten sind weg
+    assert requests.get(f"{BASE_URL}/api/evening/{code}").status_code == 404
+    assert requests.get(f"{BASE_URL}/api/evening/{code}/statistics").status_code == 404
+
+    # Erneutes Löschen -> 404
+    assert requests.delete(f"{BASE_URL}/api/evening/{code}").status_code == 404
+    print("  ✓ Abend mit offener Runde gelöscht, danach 404")
+
+
 def test_rate_limit():
     print("\n[TEST 13] Rate-Limit auf die Code-Abfrage...")
     # Nur aussagekräftig, wenn der Server mit niedrigem Limit läuft
@@ -350,5 +370,6 @@ if __name__ == "__main__":
     test_readd_player()
     test_evening_overview()
     test_csv_export()
+    test_delete_evening()
     test_rate_limit()
     print("\nAlle Tests bestanden ✓")

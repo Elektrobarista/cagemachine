@@ -158,6 +158,29 @@ class GameManager:
             "open_round": dict(open_round) if open_round else None,
         }
 
+    def delete_evening(self, code):
+        """Löscht einen Abend samt aller zugehörigen Daten (Spieler, Runden,
+        Snapshots, Zugriffe). Unumkehrbar."""
+        code = code.strip().upper()
+        with db.connect() as conn:
+            evening = conn.execute(
+                "SELECT id FROM evening WHERE code = ?", (code,)
+            ).fetchone()
+            if not evening:
+                raise EveningNotFound(f"Kein Abend mit Code '{code}' gefunden")
+            evening_id = evening["id"]
+
+            # Reihenfolge wegen Fremdschlüsseln: erst Kinder, dann Eltern
+            conn.execute(
+                "DELETE FROM round_player WHERE round_id IN"
+                " (SELECT id FROM round WHERE evening_id = ?)",
+                (evening_id,),
+            )
+            conn.execute("DELETE FROM round WHERE evening_id = ?", (evening_id,))
+            conn.execute("DELETE FROM player WHERE evening_id = ?", (evening_id,))
+            conn.execute("DELETE FROM evening_access WHERE evening_id = ?", (evening_id,))
+            conn.execute("DELETE FROM evening WHERE id = ?", (evening_id,))
+
     def record_access(self, code, visitor_id):
         """Merkt sich, dass ein Gerät (Cookie) diesen Abend geöffnet hat –
         Grundlage für die geräte-gebundene Abend-Übersicht"""

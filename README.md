@@ -99,9 +99,10 @@ Abende, Spieler, Runden und Statistik:
 
 - `POST /api/evening` - Abend anlegen, liefert den Code
 - `GET /api/evening/<code>` - Abend laden (Spieler, Positionen, laufende Runde)
+- `DELETE /api/evening/<code>` - Abend samt aller Daten löschen (unumkehrbar)
 - `POST /api/evening/<code>/players` - Spieler hinzufügen (`{"name": "..."}`)
 - `DELETE /api/evening/<code>/players/<id>` - Spieler entfernen (bleibt in alten Runden erhalten)
-- `POST /api/evening/<code>/draw` - Sitzpositionen auslosen
+- `POST /api/evening/<code>/draw` - Startposition auslosen
 - `POST /api/evening/<code>/settings` - Abend-Einstellungen (`{"random_bullrush": true}`)
 - `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
 - `POST /api/evening/<code>/round/end` - Laufende Runde beenden

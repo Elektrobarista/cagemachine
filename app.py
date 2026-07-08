@@ -101,6 +101,18 @@ def get_evening(code):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/evening/<code>", methods=["DELETE"])
+def delete_evening(code):
+    """Löscht einen Abend samt aller zugehörigen Daten (unumkehrbar)"""
+    try:
+        game_manager.delete_evening(code)
+        return jsonify({"deleted": True}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/evenings", methods=["GET"])
 def list_evenings():
     """Abende, die dieses Gerät kennt (für die Statistik-Übersicht)"""

@@ -539,8 +539,6 @@
           <button class="btn btn-add btn-small" id="btnAddPlayer">Hinzufügen</button>
         </div>
 
-        <button class="btn btn-secondary" id="btnDraw" style="width: 100%; margin-bottom: 12px;">🎲 Positionen auslosen</button>
-
         <div class="table-view" id="tableView" style="display: none;">
           <div class="table-oval"></div>
         </div>
@@ -551,6 +549,8 @@
             <div>Noch keine Spieler hinzugefügt</div>
           </div>
         </div>
+
+        <button class="btn btn-remove" id="btnDeleteEvening" style="width: 100%; margin-top: 24px; padding: 12px;">🗑️ Abend löschen</button>
       </div>
 
     </div>
@@ -789,7 +789,6 @@
     const playerSection = document.getElementById("playerSection");
     const playerNameInput = document.getElementById("playerNameInput");
     const btnAddPlayer = document.getElementById("btnAddPlayer");
-    const btnDraw = document.getElementById("btnDraw");
     const playerList = document.getElementById("playerList");
     
     const btnStart = document.getElementById("btnStart");
@@ -894,6 +893,28 @@
       }
     }
 
+    async function deleteEvening() {
+      if (!currentCode) return;
+      if (!confirm(`Abend ${currentCode} endgültig löschen? Alle Spieler, Runden `
+          + `und Statistiken dieses Abends werden unwiderruflich entfernt.`)) {
+        return;
+      }
+      const data = await apiCall(`/api/evening/${encodeURIComponent(currentCode)}`, "DELETE");
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      // Zustand zurücksetzen: Musik stoppen, lokale Merker löschen, zurück zum Start
+      try { clientAudio.stop(); } catch {}
+      resetMultiRound();
+      updateStatus();
+      localStorage.removeItem(LAST_CODE_KEY);
+      currentEvening = null;
+      currentCode = null;
+      history.replaceState(null, "", "/");
+      updateEveningUI();
+    }
+
     async function loadEvening(code) {
       code = (code || "").trim().toUpperCase();
       if (!code) return false;
@@ -930,21 +951,6 @@
         playerNameInput.focus();
       } else if (data.error) {
         alert(data.error);
-      }
-    }
-
-    async function drawPositions() {
-      if (!currentCode) return;
-      btnDraw.disabled = true;
-      try {
-        const data = await apiCall(`/api/evening/${currentCode}/draw`, "POST");
-        if (data.evening) {
-          setEvening(data.evening);
-        } else if (data.error) {
-          alert(data.error);
-        }
-      } finally {
-        btnDraw.disabled = false;
       }
     }
 
@@ -1027,9 +1033,6 @@
           playerList.appendChild(playerItem);
         });
       }
-
-      // Auslosen erst ab zwei Spielern sinnvoll
-      btnDraw.style.display = players.length >= 2 ? "block" : "none";
 
       renderTableView(players, currentEvening.open_round);
     }
@@ -1194,7 +1197,7 @@
       }
     });
     btnAddPlayer.addEventListener("click", addPlayer);
-    btnDraw.addEventListener("click", drawPositions);
+    document.getElementById("btnDeleteEvening").addEventListener("click", deleteEvening);
     // Abend-Einstellungs-Toggles: Checkbox <-> Settings-Endpoint
     function bindSettingToggle(toggle, settingKey) {
       toggle.addEventListener("change", async () => {
