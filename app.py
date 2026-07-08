@@ -4,13 +4,27 @@ import os
 import uuid
 import zipfile
 
-from flask import Flask, render_template, jsonify, request, make_response, send_file
+import qrcode
+import qrcode.image.svg
+from flask import Flask, render_template, jsonify, request, make_response, send_file, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 from game_manager import GameManager, EveningNotFound, GAME_MODES, EVENING_SETTINGS
 from utils import format_duration
 
 app = Flask(__name__)
+
+# Hinter einem Reverse-Proxy (nginx): die vom Proxy gesetzten Forwarded-Header
+# auswerten. Dadurch liefert request.host_url die echte öffentliche Adresse
+# (korrekte Teil-Links/QR) und request.remote_addr die echte Client-IP
+# (korrektes Rate-Limiting statt "alles kommt von nginx").
+# PROXY_HOPS = Anzahl vertrauenswürdiger Proxies davor (Standard 1).
+_proxy_hops = int(os.getenv("PROXY_HOPS", "1"))
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=_proxy_hops, x_proto=_proxy_hops, x_host=_proxy_hops,
+)
 
 # GameManager-Instanz erstellen (initialisiert die SQLite-DB)
 game_manager = GameManager()
@@ -113,6 +127,26 @@ def delete_evening(code):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/evening/<code>/qr", methods=["GET"])
+@limiter.limit(lambda: CODE_LOOKUP_LIMIT)
+def evening_qr(code):
+    """QR-Code (SVG) des teilbaren Abend-Links, damit Mitspieler beitreten können.
+    Der Link nutzt request.host_url – also genau die Adresse, über die der Client
+    den Server erreicht (im LAN die richtige, teilbare Adresse)."""
+    try:
+        evening = game_manager.get_evening(code)
+        link = f"{request.host_url}abend/{evening['code']}"
+        img = qrcode.make(link, image_factory=qrcode.image.svg.SvgPathImage,
+                          box_size=10, border=2)
+        buf = io.BytesIO()
+        img.save(buf)
+        return Response(buf.getvalue(), mimetype="image/svg+xml")
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/evenings", methods=["GET"])
 def list_evenings():
     """Abende, die dieses Gerät kennt (für die Statistik-Übersicht)"""
@@ -170,6 +204,21 @@ def remove_player(code, player_id):
         return jsonify({"error": str(e)}), 404
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<code>/name", methods=["POST"])
+def set_evening_name(code):
+    """Setzt den optionalen Abend-Namen (leer = kein Name)"""
+    try:
+        data = request.get_json(silent=True) or {}
+        evening = game_manager.set_name(code, data.get("name", ""))
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

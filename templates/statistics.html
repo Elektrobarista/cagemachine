@@ -357,7 +357,8 @@
         return;
       }
 
-      document.getElementById("eveningCodeTitle").textContent = data.evening.code;
+      document.getElementById("eveningCodeTitle").textContent =
+        data.evening.name ? `${data.evening.code} · ${data.evening.name}` : data.evening.code;
       document.getElementById("totalRounds").textContent = data.summary.total_rounds;
       document.getElementById("totalDuration").textContent = data.summary.total_duration_formatted || "00:00";
       document.getElementById("longestRound").textContent =
@@ -411,7 +412,7 @@
 
         const codeEl = document.createElement("span");
         codeEl.className = "evening-item-code";
-        codeEl.textContent = e.code;
+        codeEl.textContent = e.name ? `${e.code} · ${e.name}` : e.code;
 
         const info = document.createElement("span");
         info.className = "evening-item-info";

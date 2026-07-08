@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS evening (
     created_at       TEXT NOT NULL,
     last_used_at     TEXT NOT NULL,
     random_bullrush  INTEGER NOT NULL DEFAULT 0,
-    last_bullrush_at TEXT
+    last_bullrush_at TEXT,
+    name             TEXT
 );
 
 CREATE TABLE IF NOT EXISTS player (
@@ -89,6 +90,8 @@ def init_db():
             )
         if "last_bullrush_at" not in columns:
             conn.execute("ALTER TABLE evening ADD COLUMN last_bullrush_at TEXT")
+        if "name" not in columns:
+            conn.execute("ALTER TABLE evening ADD COLUMN name TEXT")
         round_columns = {row["name"] for row in conn.execute("PRAGMA table_info(round)")}
         if "start_pos2" not in round_columns:
             conn.execute("ALTER TABLE round ADD COLUMN start_pos2 INTEGER")

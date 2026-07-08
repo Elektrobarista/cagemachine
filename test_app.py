@@ -317,6 +317,42 @@ def test_csv_export():
     print("  ✓ ZIP mit spieler_/runden_-CSV, Inhalte korrekt, 404 bei Unbekannt")
 
 
+def test_evening_name():
+    print("\n[TEST 16] Abend benennen...")
+    session = requests.Session()
+    code = session.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    assert session.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["name"] == ""
+
+    r = session.post(f"{BASE_URL}/api/evening/{code}/name", json={"name": "  Freitag bei Max  "})
+    assert r.status_code == 200
+    assert r.json()["evening"]["name"] == "Freitag bei Max", "Name sollte getrimmt werden"
+
+    # Name erscheint in der eigenen Abend-Liste
+    evenings = session.get(f"{BASE_URL}/api/evenings").json()["evenings"]
+    assert any(e["code"] == code and e["name"] == "Freitag bei Max" for e in evenings)
+
+    # Leeren setzt zurück
+    r = session.post(f"{BASE_URL}/api/evening/{code}/name", json={"name": ""})
+    assert r.json()["evening"]["name"] == ""
+
+    r = session.post(f"{BASE_URL}/api/evening/{code}/name", json={"name": "X" * 61})
+    assert r.status_code == 400, "Zu langer Name sollte 400 liefern"
+    r = session.post(f"{BASE_URL}/api/evening/XXXX/name", json={"name": "Y"})
+    assert r.status_code == 404, "Unbekannter Code sollte 404 liefern"
+    print("  ✓ Name setzen/trimmen/leeren, in Liste sichtbar, Längen- und 404-Check")
+
+
+def test_evening_qr():
+    print("\n[TEST 17] QR-Code des Abend-Links...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    r = requests.get(f"{BASE_URL}/api/evening/{code}/qr")
+    assert r.status_code == 200
+    assert "image/svg+xml" in r.headers["Content-Type"]
+    assert b"<svg" in r.content
+    assert requests.get(f"{BASE_URL}/api/evening/XXXX/qr").status_code == 404
+    print("  ✓ SVG-QR geliefert, 404 bei unbekanntem Code")
+
+
 def test_delete_evening():
     print("\n[TEST 15] Abend löschen (inkl. aller Daten)...")
     code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
@@ -370,6 +406,8 @@ if __name__ == "__main__":
     test_readd_player()
     test_evening_overview()
     test_csv_export()
+    test_evening_name()
+    test_evening_qr()
     test_delete_evening()
     test_rate_limit()
     print("\nAlle Tests bestanden ✓")

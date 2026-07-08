@@ -485,6 +485,93 @@
       margin-bottom: 16px;
     }
 
+    /* Teilen-Bereich (auf-/zuklappbar): Link kopieren + QR */
+    .share-box {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #e8e8e8;
+    }
+
+    .share-box summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #667eea;
+      list-style: none;
+      user-select: none;
+    }
+
+    .share-box summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .share-box summary::before {
+      content: "▸ ";
+    }
+
+    .share-box[open] summary::before {
+      content: "▾ ";
+    }
+
+    .share-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .share-qr {
+      width: 160px;
+      height: 160px;
+      background: white;
+      border-radius: 8px;
+    }
+
+    /* Abend-Verlauf auf dem Startbildschirm */
+    .evening-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      margin-top: 10px;
+      border-radius: 8px;
+      background: #f8f9fa;
+      text-decoration: none;
+      color: #333;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .evening-item:hover {
+      background: #eef0ff;
+    }
+
+    .evening-item-code {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #667eea;
+    }
+
+    .evening-item-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      align-items: flex-start;
+    }
+
+    .evening-item-name {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .evening-item-info {
+      color: #777;
+      font-size: 13px;
+      text-align: right;
+    }
+
   </style>
 </head>
 <body>
@@ -511,11 +598,24 @@
         <button class="btn btn-secondary btn-small" id="btnResumeEvening">Fortsetzen</button>
       </div>
 
+      <div id="eveningHistory" style="display: none;">
+        <div class="section-title" style="margin-top: 20px;">Deine Abende</div>
+        <div id="eveningHistoryList"></div>
+      </div>
+
       <div id="eveningInfo" class="session-info" style="display: none;">
         <div class="session-info-item">
           <span class="session-info-label">Abend-Code:</span>
           <span class="session-info-value" id="eveningCode" style="font-size: 24px; font-weight: 700; letter-spacing: 3px;">-</span>
         </div>
+        <input
+          type="text"
+          class="input"
+          id="eveningNameInput"
+          placeholder="Abend benennen…"
+          maxlength="60"
+          style="margin-bottom: 8px;"
+        />
         <div class="session-info-item">
           <span class="session-info-label">Spieler:</span>
           <span class="session-info-value" id="playerCount">0</span>
@@ -524,6 +624,14 @@
           <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden">🐂 Zufalls-Bullrush:</span>
           <input type="checkbox" id="randomBullrushToggle" style="width: 20px; height: 20px; cursor: pointer;" />
         </div>
+
+        <details class="share-box" id="shareBox">
+          <summary>🔗 Abend teilen</summary>
+          <div class="share-content">
+            <button class="btn btn-secondary btn-small" id="btnCopyLink">🔗 Link kopieren</button>
+            <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
+          </div>
+        </details>
       </div>
 
       <div id="playerSection" style="display: none;">
@@ -556,7 +664,7 @@
     </div>
 
     <!-- Music Control Card -->
-    <div class="card">
+    <div class="card" id="musicCard">
       <h1>🎵 Musik Steuerung</h1>
 
       <div class="mode-select" id="modeSelect"></div>
@@ -790,6 +898,10 @@
     const playerNameInput = document.getElementById("playerNameInput");
     const btnAddPlayer = document.getElementById("btnAddPlayer");
     const playerList = document.getElementById("playerList");
+    const musicCard = document.getElementById("musicCard");
+    const eveningNameInput = document.getElementById("eveningNameInput");
+    const eveningHistory = document.getElementById("eveningHistory");
+    const eveningHistoryList = document.getElementById("eveningHistoryList");
     
     const btnStart = document.getElementById("btnStart");
     const btnPause = document.getElementById("btnPause");
@@ -874,8 +986,68 @@
           history.replaceState(null, "", targetPath);
         }
         document.getElementById("statisticsLink").href = `/statistics/${currentCode}`;
+        // QR-Code nur bei Code-Wechsel neu laden (vermeidet Flackern)
+        const qr = document.getElementById("shareQr");
+        const qrSrc = `/api/evening/${encodeURIComponent(currentCode)}/qr`;
+        if (qr.getAttribute("src") !== qrSrc) qr.src = qrSrc;
       }
       updateEveningUI();
+    }
+
+    // Teilbarer Link zum aktuellen Abend
+    function eveningLink() {
+      return `${window.location.origin}/abend/${currentCode}`;
+    }
+
+    // Kurze visuelle Rückmeldung auf einem Button ("✓ kopiert")
+    async function copyWithFeedback(btn, text) {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // Fallback ohne Clipboard-API (z. B. ohne HTTPS): Prompt zum Kopieren
+        prompt("Kopieren:", text);
+        return;
+      }
+      const original = btn.textContent;
+      btn.textContent = "✓ kopiert";
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }
+
+    // Eigene Abende (Geräte-Cookie) auf dem Startbildschirm zum Fortsetzen
+    async function loadEveningHistory() {
+      const data = await apiCall("/api/evenings", "GET");
+      const evenings = (data && data.evenings) || [];
+      if (!evenings.length) {
+        eveningHistory.style.display = "none";
+        return;
+      }
+      eveningHistoryList.innerHTML = "";
+      evenings.forEach(e => {
+        const item = document.createElement("div");
+        item.className = "evening-item";
+        item.onclick = () => loadEvening(e.code);
+
+        const main = document.createElement("div");
+        main.className = "evening-item-main";
+        const codeEl = document.createElement("span");
+        codeEl.className = "evening-item-code";
+        codeEl.textContent = e.code;
+        main.appendChild(codeEl);
+        if (e.name) {
+          const nameEl = document.createElement("span");
+          nameEl.className = "evening-item-name";
+          nameEl.textContent = e.name;
+          main.appendChild(nameEl);
+        }
+
+        const info = document.createElement("span");
+        info.className = "evening-item-info";
+        info.textContent = `${e.player_count} Spieler · ${e.round_count} Runden`;
+
+        item.append(main, info);
+        eveningHistoryList.appendChild(item);
+      });
+      eveningHistory.style.display = "block";
     }
 
     async function createEvening() {
@@ -969,21 +1141,29 @@
       if (!currentEvening) {
         eveningInfo.style.display = "none";
         playerSection.style.display = "none";
+        musicCard.style.display = "none";       // ohne Abend nichts zu steuern
         eveningStartControls.style.display = "block";
         resumeGroup.style.display = "flex";
+        loadEveningHistory();                   // eigene Abende zum Fortsetzen
         return;
       }
 
-      // Abend aktiv: Start-/Fortsetzen-Controls ausblenden
+      // Abend aktiv: Start-/Fortsetzen-Controls und Verlauf ausblenden
       eveningStartControls.style.display = "none";
       resumeGroup.style.display = "none";
+      eveningHistory.style.display = "none";
       eveningInfo.style.display = "block";
       playerSection.style.display = "block";
+      musicCard.style.display = "block";
 
       document.getElementById("eveningCode").textContent = currentEvening.code;
       const players = currentEvening.players || [];
       document.getElementById("playerCount").textContent = players.length;
       randomBullrushToggle.checked = !!currentEvening.random_bullrush;
+      // Namensfeld nicht überschreiben, während der Nutzer tippt
+      if (document.activeElement !== eveningNameInput) {
+        eveningNameInput.value = currentEvening.name || "";
+      }
 
       // Player List
       if (players.length === 0) {
@@ -1198,6 +1378,29 @@
     });
     btnAddPlayer.addEventListener("click", addPlayer);
     document.getElementById("btnDeleteEvening").addEventListener("click", deleteEvening);
+
+    // Abend benennen: speichern bei Verlassen des Feldes oder Enter
+    async function saveEveningName() {
+      if (!currentCode) return;
+      const name = eveningNameInput.value.trim();
+      if (name === (currentEvening.name || "")) return; // nichts geändert
+      const data = await apiCall(`/api/evening/${currentCode}/name`, "POST", { name });
+      if (data.evening) {
+        setEvening(data.evening);
+      } else if (data.error) {
+        alert(data.error);
+        eveningNameInput.value = currentEvening.name || "";
+      }
+    }
+    eveningNameInput.addEventListener("blur", saveEveningName);
+    eveningNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") eveningNameInput.blur();
+    });
+
+    // Teilen: Link kopieren
+    document.getElementById("btnCopyLink").addEventListener("click", (e) => {
+      if (currentCode) copyWithFeedback(e.currentTarget, eveningLink());
+    });
     // Abend-Einstellungs-Toggles: Checkbox <-> Settings-Endpoint
     function bindSettingToggle(toggle, settingKey) {
       toggle.addEventListener("change", async () => {

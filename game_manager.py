@@ -152,11 +152,25 @@ class GameManager:
 
         return {
             "code": evening["code"],
+            "name": evening["name"] or "",
             "created_at": evening["created_at"],
             "random_bullrush": bool(evening["random_bullrush"]),
             "players": [_player_dict(p) for p in players],
             "open_round": dict(open_round) if open_round else None,
         }
+
+    def set_name(self, code, name):
+        """Setzt den optionalen Abend-Namen (leer = kein Name)"""
+        name = (name or "").strip()
+        if len(name) > 60:
+            raise ValueError("Abend-Name darf maximal 60 Zeichen lang sein")
+        evening = self.get_evening(code)
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE evening SET name = ? WHERE code = ?",
+                (name or None, evening["code"]),
+            )
+        return self.get_evening(code)
 
     def delete_evening(self, code):
         """Löscht einen Abend samt aller zugehörigen Daten (Spieler, Runden,
@@ -201,7 +215,7 @@ class GameManager:
         Codes fremder Abende bleiben so geheim"""
         with db.connect() as conn:
             rows = conn.execute(
-                "SELECT e.code, e.created_at, a.last_used_at,"
+                "SELECT e.code, e.name, e.created_at, a.last_used_at,"
                 " (SELECT COUNT(*) FROM player p"
                 "   WHERE p.evening_id = e.id AND p.active = 1) AS player_count,"
                 " (SELECT COUNT(*) FROM round r"
@@ -212,7 +226,7 @@ class GameManager:
                 " ORDER BY a.last_used_at DESC LIMIT ?",
                 (visitor_id, limit),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [{**dict(row), "name": row["name"] or ""} for row in rows]
 
     def set_setting(self, code, setting, enabled):
         """Schaltet eine boolesche Abend-Einstellung an/aus"""
@@ -476,7 +490,8 @@ class GameManager:
         )
 
         return {
-            "evening": {"code": evening["code"], "created_at": evening["created_at"]},
+            "evening": {"code": evening["code"], "name": evening.get("name", ""),
+                        "created_at": evening["created_at"]},
             "summary": {
                 "total_rounds": total_rounds,
                 "total_duration": total_duration,

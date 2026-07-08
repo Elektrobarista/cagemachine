@@ -51,6 +51,43 @@ docker compose up
 Abende, Spieler und Runden liegen in einer SQLite-Datei (`data/cagemachine.db`,
 über `DB_PATH` konfigurierbar; im Docker-Setup als Volume gemountet).
 
+### Betrieb hinter nginx (Reverse-Proxy)
+
+Läuft cagemachine hinter einem Reverse-Proxy (eigene Domain, HTTPS), wertet die
+App die vom Proxy gesetzten `X-Forwarded-*`-Header aus (`ProxyFix`). Dadurch
+enthalten teilbare Links und QR-Codes die echte öffentliche Adresse, und das
+Rate-Limiting sieht die echte Client-IP statt nur den Proxy.
+
+Eine fertige Beispiel-Konfiguration liegt in [`nginx.example.conf`](nginx.example.conf)
+(`proxy_pass`-Ziel an die eigene Topologie anpassen). Wichtig sind die
+weitergereichten Header:
+
+```nginx
+location / {
+    proxy_pass http://APP_HOST:3000;   # localhost oder private-Netz-Adresse der App
+    proxy_set_header Host              $host;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host  $host;
+}
+```
+
+**Wichtig für die Sicherheit:** Da die App den Forwarded-Headern vertraut, darf
+sie **nur über den Reverse-Proxy** erreichbar sein – sonst könnte ein Client die
+Header direkt fälschen und Rate-Limiting bzw. den echten Host aushebeln. Je nach
+Topologie:
+
+- **nginx auf demselben Host wie die App:** App nur an localhost binden –
+  ohne Docker `FLASK_HOST=127.0.0.1`, mit Docker das Port-Mapping in
+  `docker-compose.yml` auf `127.0.0.1:3000:3000` beschränken.
+- **nginx auf einem eigenen Server (App im privaten Netz):** Die App muss für
+  den Proxy über das Netz erreichbar sein (also nicht localhost). Hier sorgt die
+  Netzwerk-Ebene für die Absicherung – nur der Proxy-Host darf zum App-Port
+  (Firewall/Security-Group/Subnetz); das Docker-Mapping bleibt `3000:3000`.
+
+Vertraut wird standardmäßig genau ein Proxy-Hop; bei einer Proxy-Kette lässt sich
+das über die Umgebungsvariable `PROXY_HOPS` anpassen.
+
 ### Ablauf eines Abends
 
 1. **Abend starten:** "Neuen Abend starten" erzeugt einen 4-stelligen **Abend-Code**
@@ -103,7 +140,9 @@ Abende, Spieler, Runden und Statistik:
 - `POST /api/evening/<code>/players` - Spieler hinzufügen (`{"name": "..."}`)
 - `DELETE /api/evening/<code>/players/<id>` - Spieler entfernen (bleibt in alten Runden erhalten)
 - `POST /api/evening/<code>/draw` - Startposition auslosen
+- `POST /api/evening/<code>/name` - Abend benennen (`{"name": "..."}`, leer = kein Name)
 - `POST /api/evening/<code>/settings` - Abend-Einstellungen (`{"random_bullrush": true}`)
+- `GET /api/evening/<code>/qr` - QR-Code (SVG) des teilbaren Abend-Links
 - `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
 - `POST /api/evening/<code>/round/end` - Laufende Runde beenden
 - `GET /api/evening/<code>/statistics` - Abend-Statistik (Spieler-Auswertung, Rundenliste)
