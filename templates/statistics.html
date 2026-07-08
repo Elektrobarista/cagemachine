@@ -276,8 +276,9 @@
         `;
         data.players.forEach(p => {
           const name = esc(p.name) + (p.active ? "" : " <span style='color:#999;'>(ausgeschieden)</span>");
-          const pos = p.last_position === null ? "–"
-            : (p.last_position === 1 ? "1 🍺" : p.last_position);
+          // Startbecher werden pro Runde neu gelost – die Sitznummer allein
+          // sagt nichts mehr über den Becher aus
+          const pos = p.last_position === null ? "–" : p.last_position;
           html += `<tr>
             <td>${name}</td>
             <td>${p.rounds_played}</td>

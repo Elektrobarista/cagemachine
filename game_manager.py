@@ -78,6 +78,15 @@ def _generate_code():
     return "".join(random.choices(CODE_ALPHABET, k=CODE_LENGTH))
 
 
+def _second_start_position(n):
+    """Position des zweiten Startbechers: Becher 1 ist immer Position 1,
+    Becher 2 liegt zirkulär gegenüber (bei ungerader Spielerzahl so nah
+    wie möglich) – maximal fairer Abstand in beide Laufrichtungen"""
+    if n < 2:
+        return None
+    return 1 + n // 2
+
+
 def _player_dict(row):
     return {
         "id": row["id"],
@@ -132,7 +141,7 @@ class GameManager:
                 (evening["id"],),
             ).fetchall()
             open_round = conn.execute(
-                "SELECT id, mode, started_at FROM round"
+                "SELECT id, mode, started_at, start_pos2 FROM round"
                 " WHERE evening_id = ? AND ended_at IS NULL"
                 " ORDER BY started_at DESC LIMIT 1",
                 (evening["id"],),
@@ -279,8 +288,9 @@ class GameManager:
 
             round_id = str(uuid.uuid4())
             conn.execute(
-                "INSERT INTO round (id, evening_id, mode, started_at) VALUES (?, ?, ?, ?)",
-                (round_id, evening_id, mode, now),
+                "INSERT INTO round (id, evening_id, mode, started_at, start_pos2)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (round_id, evening_id, mode, now, _second_start_position(len(players))),
             )
             for player in evening["players"]:
                 conn.execute(

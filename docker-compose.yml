@@ -1,8 +1,7 @@
-version: '3.8'
-
 services:
   cagemachine:
     build: .
+    image: cagemachine
     container_name: cagemachine
     ports:
       - "3000:3000"

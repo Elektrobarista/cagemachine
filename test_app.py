@@ -159,10 +159,24 @@ def test_draw_on_start():
 
     # Jeder Rundenstart lost aus: Positionen sind eine Permutation von 1..4
     r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
-    players = r.json()["evening"]["players"]
-    assert sorted(p["position"] for p in players) == [1, 2, 3, 4], \
+    evening = r.json()["evening"]
+    assert sorted(p["position"] for p in evening["players"]) == [1, 2, 3, 4], \
         "Rundenstart sollte alle Positionen auslosen"
+
+    # Becher 1 ist immer Position 1, Becher 2 zirkulär gegenüber:
+    # bei 4 Spielern Position 3
+    assert evening["open_round"]["start_pos2"] == 3, \
+        "Bei 4 Spielern muss der zweite Startbecher auf Position 3 liegen"
     requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    # Bei 7 Spielern (ungerade): so nah am Gegenüber wie möglich (Position 4)
+    code7 = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["P1", "P2", "P3", "P4", "P5", "P6", "P7"]:
+        requests.post(f"{BASE_URL}/api/evening/{code7}/players", json={"name": name})
+    r = requests.post(f"{BASE_URL}/api/evening/{code7}/round/start", json={"mode": "classic"})
+    assert r.json()["evening"]["open_round"]["start_pos2"] == 4, \
+        "Bei 7 Spielern muss der zweite Startbecher auf Position 4 liegen"
+    requests.post(f"{BASE_URL}/api/evening/{code7}/round/end")
 
     # Auch der nächste Start lost (wieder vollständige Permutation)
     r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})

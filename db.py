@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS round (
     mode       TEXT NOT NULL DEFAULT 'classic',
     started_at TEXT NOT NULL,
     ended_at   TEXT,
-    duration   REAL
+    duration   REAL,
+    start_pos2 INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS round_player (
@@ -80,3 +81,6 @@ def init_db():
             )
         if "last_bullrush_at" not in columns:
             conn.execute("ALTER TABLE evening ADD COLUMN last_bullrush_at TEXT")
+        round_columns = {row["name"] for row in conn.execute("PRAGMA table_info(round)")}
+        if "start_pos2" not in round_columns:
+            conn.execute("ALTER TABLE round ADD COLUMN start_pos2 INTEGER")

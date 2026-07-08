@@ -57,10 +57,15 @@ Abende, Spieler und Runden liegen in einer SQLite-Datei (`data/cagemachine.db`,
    (z. B. `K7FQ`). Mit dem Code lässt sich der Abend jederzeit fortsetzen – per
    Eingabefeld oder direkt über den Link `/abend/<code>`.
 2. **Spieler hinzufügen** und mit **"Positionen auslosen"** die Sitzreihenfolge
-   bestimmen: Position 1 sitzt am Startbecher (🍺). Nachzügler werden hinten
+   bestimmen. Nachzügler werden hinten
    angehängt; wird ein Spieler entfernt, rücken die anderen auf. Bei jedem
    **Rundenstart wird die Sitzordnung automatisch neu ausgelost** – der Button
-   dient nur der Auslosung vor der ersten Runde.
+   dient nur der Auslosung vor der ersten Runde. Pro Runde gibt es **zwei
+   Startbecher**: Becher 1 ist immer Position 1 (die Nummern laufen von dort
+   im Uhrzeigersinn), Becher 2 liegt zirkulär gegenüber – maximal fairer
+   Abstand in beide Laufrichtungen. Die Tisch-Ansicht zeigt die Sitzordnung
+   im Oval und dreht sich pro Runde zufällig. Das Intro ist die Zeit, die
+   neuen Plätze einzunehmen.
 3. **Spielmodus wählen** (Classic oder Bullrush) und die Musik starten.
    Jeder Musik-Start ist eine Runde: Wer gerade mitspielt, wird mit Position
    festgehalten und in der Statistik gezählt. Pause zählt nicht als Rundenende.
@@ -96,7 +101,7 @@ Abende, Spieler, Runden und Statistik:
 - `GET /api/evening/<code>` - Abend laden (Spieler, Positionen, laufende Runde)
 - `POST /api/evening/<code>/players` - Spieler hinzufügen (`{"name": "..."}`)
 - `DELETE /api/evening/<code>/players/<id>` - Spieler entfernen (bleibt in alten Runden erhalten)
-- `POST /api/evening/<code>/draw` - Sitzpositionen auslosen (1 = Startbecher)
+- `POST /api/evening/<code>/draw` - Sitzpositionen auslosen
 - `POST /api/evening/<code>/settings` - Abend-Einstellungen (`{"random_bullrush": true}`)
 - `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
 - `POST /api/evening/<code>/round/end` - Laufende Runde beenden
