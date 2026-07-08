@@ -1,2 +1,5 @@
 # Web Framework
 flask>=3.0.0
+
+# Rate-Limiting (schützt die Code-Abfrage gegen Enumeration)
+flask-limiter>=3.5.0

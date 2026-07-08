@@ -106,6 +106,8 @@ Abende, Spieler, Runden und Statistik:
 - `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
 - `POST /api/evening/<code>/round/end` - Laufende Runde beenden
 - `GET /api/evening/<code>/statistics` - Abend-Statistik (Spieler-Auswertung, Rundenliste)
+- `GET /api/evenings` - Abende, die dieses Gerät geöffnet hat (anonymes Cookie;
+  Grundlage der Übersicht auf `/statistics` ohne Code)
 - `GET /api/modes` - Verfügbare Spielmodi
 
 Integrationstests: Server starten und `python test_app.py` ausführen

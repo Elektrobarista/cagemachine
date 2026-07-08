@@ -1,6 +1,7 @@
 """Business-Logik für Abend- und Spieler-Management (SQLite-basiert)"""
 import os
 import random
+import secrets
 import sqlite3
 import uuid
 from datetime import datetime
@@ -75,7 +76,9 @@ def _duration_seconds(start_iso, end_iso):
 
 
 def _generate_code():
-    return "".join(random.choices(CODE_ALPHABET, k=CODE_LENGTH))
+    # secrets statt random: der Code ist der einzige Zugangsschutz eines Abends,
+    # darf also nicht aus einem vorhersagbaren PRNG-Zustand ableitbar sein
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
 
 
 def _second_start_position(n):
@@ -154,6 +157,39 @@ class GameManager:
             "players": [_player_dict(p) for p in players],
             "open_round": dict(open_round) if open_round else None,
         }
+
+    def record_access(self, code, visitor_id):
+        """Merkt sich, dass ein Gerät (Cookie) diesen Abend geöffnet hat –
+        Grundlage für die geräte-gebundene Abend-Übersicht"""
+        with db.connect() as conn:
+            evening = conn.execute(
+                "SELECT id FROM evening WHERE code = ?", (code.strip().upper(),)
+            ).fetchone()
+            if not evening:
+                return
+            conn.execute(
+                "INSERT OR REPLACE INTO evening_access (evening_id, visitor_id, last_used_at)"
+                " VALUES (?, ?, ?)",
+                (evening["id"], visitor_id, _now()),
+            )
+
+    def list_evenings(self, visitor_id, limit=20):
+        """Abende, die dieses Gerät geöffnet hat (neueste zuerst) –
+        Codes fremder Abende bleiben so geheim"""
+        with db.connect() as conn:
+            rows = conn.execute(
+                "SELECT e.code, e.created_at, a.last_used_at,"
+                " (SELECT COUNT(*) FROM player p"
+                "   WHERE p.evening_id = e.id AND p.active = 1) AS player_count,"
+                " (SELECT COUNT(*) FROM round r"
+                "   WHERE r.evening_id = e.id) AS round_count"
+                " FROM evening_access a"
+                " JOIN evening e ON e.id = a.evening_id"
+                " WHERE a.visitor_id = ?"
+                " ORDER BY a.last_used_at DESC LIMIT ?",
+                (visitor_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def set_setting(self, code, setting, enabled):
         """Schaltet eine boolesche Abend-Einstellung an/aus"""
@@ -357,10 +393,13 @@ class GameManager:
         mode_counts = {}
         total_duration = 0.0
         longest_round = None
+        timed_rounds = 0
+        cup2_by_round = {r["id"]: r["start_pos2"] for r in rounds}
         for r in rounds:
             mode_counts[r["mode"]] = mode_counts.get(r["mode"], 0) + 1
             if r["duration"] is not None:
                 total_duration += r["duration"]
+                timed_rounds += 1
                 if longest_round is None or r["duration"] > longest_round:
                     longest_round = r["duration"]
             rounds_out.append({
@@ -378,6 +417,7 @@ class GameManager:
                 "active": bool(p["active"]),
                 "rounds_played": 0,
                 "total_duration": 0.0,
+                "start_cups": 0,
                 "last_position": p["position"],
             }
             for p in all_players
@@ -389,6 +429,9 @@ class GameManager:
                 stats["total_duration"] += row["duration"]
             if row["position"] is not None:
                 stats["last_position"] = row["position"]
+                # Startbecher: Position 1 immer, Becher 2 laut Runde
+                if row["position"] == 1 or row["position"] == cup2_by_round.get(row["round_id"]):
+                    stats["start_cups"] += 1
 
         players_out = [
             s for s in player_stats.values()
@@ -396,12 +439,28 @@ class GameManager:
         ]
         players_out.sort(key=lambda s: (-s["rounds_played"], s["name"].lower()))
 
+        total_rounds = len(rounds_out)
+        for s in players_out:
+            s["participation"] = (
+                round(100 * s["rounds_played"] / total_rounds) if total_rounds else 0
+            )
+
+        # Abend-Zeitraum: erste Runde bis Ende der letzten (bzw. deren Start,
+        # solange sie noch läuft)
+        first_round_at = rounds[0]["started_at"] if rounds else None
+        last_round_at = (
+            (rounds[-1]["ended_at"] or rounds[-1]["started_at"]) if rounds else None
+        )
+
         return {
             "evening": {"code": evening["code"], "created_at": evening["created_at"]},
             "summary": {
-                "total_rounds": len(rounds_out),
+                "total_rounds": total_rounds,
                 "total_duration": total_duration,
                 "longest_round": longest_round,
+                "avg_duration": total_duration / timed_rounds if timed_rounds else None,
+                "first_round_at": first_round_at,
+                "last_round_at": last_round_at,
                 "modes": mode_counts,
             },
             "players": players_out,

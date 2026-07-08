@@ -242,10 +242,65 @@ def test_statistics(code):
     names = [p["name"] for p in data["players"]]
     assert len(names) == 2 and set(names) <= {"Anna", "Ben", "Chris"}
 
+    # Erweiterte Auswertung: Ø-Dauer, Zeitraum, Startbecher, Teilnahme-Quote
+    assert data["summary"]["avg_duration"] is not None
+    assert "avg_duration_formatted" in data["summary"]
+    assert data["summary"]["first_round_at"] is not None
+    assert data["summary"]["last_round_at"] is not None
+    assert top["participation"] == 100, "Top-Spieler war in jeder Runde dabei"
+    # Eine Runde mit 2 Spielern: beide Startbecher vergeben (Position 1 und 2)
+    assert sum(p["start_cups"] for p in data["players"]) == 2
+
     r = requests.get(f"{BASE_URL}/api/evening/XXXX/statistics")
     assert r.status_code == 404, "Statistik zu unbekanntem Code sollte 404 liefern"
     print(f"  ✓ {data['summary']['total_rounds']} Runde(n), "
           f"Top-Spieler {top['name']} mit {top['rounds_played']} Runde(n)")
+
+
+def test_evening_overview():
+    print("\n[TEST 12] Geräte-gebundene Abend-Übersicht...")
+    device_a = requests.Session()
+    device_b = requests.Session()
+
+    r = device_a.post(f"{BASE_URL}/api/evening")
+    code = r.json()["evening"]["code"]
+    assert "cagemachine_visitor" in device_a.cookies, "Cookie sollte gesetzt werden"
+    device_a.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": "Udo"})
+
+    # Gerät A sieht seinen Abend samt Zählern
+    evenings = device_a.get(f"{BASE_URL}/api/evenings").json()["evenings"]
+    entry = next(e for e in evenings if e["code"] == code)
+    assert entry["player_count"] == 1 and entry["round_count"] == 0
+
+    # Gerät B kennt den Code nicht -> Abend taucht nicht auf
+    evenings_b = device_b.get(f"{BASE_URL}/api/evenings").json()["evenings"]
+    assert all(e["code"] != code for e in evenings_b), \
+        "Fremdes Gerät darf den Abend nicht sehen"
+
+    # Erst nach dem Öffnen per Code erscheint er auch auf Gerät B
+    device_b.get(f"{BASE_URL}/api/evening/{code}")
+    evenings_b = device_b.get(f"{BASE_URL}/api/evenings").json()["evenings"]
+    assert any(e["code"] == code for e in evenings_b)
+    print("  ✓ Übersicht nur für Geräte, die den Abend per Code geöffnet haben")
+
+
+def test_rate_limit():
+    print("\n[TEST 13] Rate-Limit auf die Code-Abfrage...")
+    # Nur aussagekräftig, wenn der Server mit niedrigem Limit läuft
+    if os.getenv("CODE_LOOKUP_LIMIT") != "5 per minute":
+        print("  ✓ übersprungen (CODE_LOOKUP_LIMIT != '5 per minute')")
+        return
+    codes = 0
+    got_429 = False
+    for _ in range(15):
+        r = requests.get(f"{BASE_URL}/api/evening/ZZZZ")
+        if r.status_code == 429:
+            got_429 = True
+            assert "error" in r.json(), "429 sollte JSON mit 'error' liefern"
+            break
+        codes += 1
+    assert got_429, "Nach wenigen Anfragen sollte ein 429 kommen"
+    print(f"  ✓ 429 nach {codes} Anfragen, als JSON")
 
 
 if __name__ == "__main__":
@@ -260,4 +315,6 @@ if __name__ == "__main__":
     test_random_bullrush()
     test_draw_on_start()
     test_readd_player()
+    test_evening_overview()
+    test_rate_limit()
     print("\nAlle Tests bestanden ✓")

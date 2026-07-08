@@ -1,4 +1,9 @@
-from flask import Flask, render_template, jsonify, request
+import os
+import uuid
+
+from flask import Flask, render_template, jsonify, request, make_response
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from game_manager import GameManager, EveningNotFound, GAME_MODES, EVENING_SETTINGS
 from utils import format_duration
 
@@ -6,6 +11,40 @@ app = Flask(__name__)
 
 # GameManager-Instanz erstellen (initialisiert die SQLite-DB)
 game_manager = GameManager()
+
+# Rate-Limiting pro IP. Der Abend-Code ist der einzige Zugangsschutz; ohne
+# Drosselung ließe sich der 4-Zeichen-Raum durchprobieren (Enumeration).
+# In-Memory-Speicher genügt für die Single-Prozess-Instanz.
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=["600 per hour"],
+    storage_uri="memory://",
+)
+
+# Codes probieren = teuer machen; Limit per Env-Var übersteuerbar (Tests: hoch)
+CODE_LOOKUP_LIMIT = os.getenv("CODE_LOOKUP_LIMIT", "20 per minute")
+
+VISITOR_COOKIE = "cagemachine_visitor"
+
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Rate-Limit als JSON, damit das Frontend eine saubere Fehlermeldung bekommt"""
+    return jsonify({"error": "Zu viele Anfragen – bitte kurz warten."}), 429
+
+
+def _visitor_response(payload, evening_code):
+    """Antwort mit Geräte-Cookie; merkt den Abend für die Übersicht vor.
+    Das Cookie identifiziert nur das Gerät – der Abend-Code bleibt der Schlüssel."""
+    visitor_id = request.cookies.get(VISITOR_COOKIE) or str(uuid.uuid4())
+    game_manager.record_access(evening_code, visitor_id)
+    response = make_response(jsonify(payload), 200)
+    response.set_cookie(
+        VISITOR_COOKIE, visitor_id,
+        max_age=365 * 24 * 3600, httponly=True, samesite="Lax",
+    )
+    return response
 
 
 @app.route("/")
@@ -41,19 +80,31 @@ def create_evening():
     """Erstellt einen neuen Abend und liefert dessen Code"""
     try:
         evening = game_manager.create_evening()
-        return jsonify({"evening": evening}), 200
+        return _visitor_response({"evening": evening}, evening["code"])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/evening/<code>", methods=["GET"])
+@limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def get_evening(code):
     """Lädt einen Abend über seinen Code (Wiederaufnahme)"""
     try:
         evening = game_manager.get_evening(code)
-        return jsonify({"evening": evening}), 200
+        return _visitor_response({"evening": evening}, evening["code"])
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evenings", methods=["GET"])
+def list_evenings():
+    """Abende, die dieses Gerät kennt (für die Statistik-Übersicht)"""
+    try:
+        visitor_id = request.cookies.get(VISITOR_COOKIE)
+        evenings = game_manager.list_evenings(visitor_id) if visitor_id else []
+        return jsonify({"evenings": evenings}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -160,6 +211,7 @@ def end_round(code):
 
 # Statistik-API
 @app.route("/api/evening/<code>/statistics", methods=["GET"])
+@limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def get_evening_statistics(code):
     """Statistik eines Abends: Zusammenfassung, Spieler-Auswertung, Rundenliste"""
     try:
@@ -167,12 +219,14 @@ def get_evening_statistics(code):
 
         stats["summary"]["total_duration_formatted"] = format_duration(stats["summary"]["total_duration"])
         stats["summary"]["longest_round_formatted"] = format_duration(stats["summary"]["longest_round"])
+        stats["summary"]["avg_duration_formatted"] = format_duration(stats["summary"]["avg_duration"])
         for player in stats["players"]:
             player["total_duration_formatted"] = format_duration(player["total_duration"])
         for r in stats["rounds"]:
             r["duration_formatted"] = format_duration(r["duration"]) if r["duration"] is not None else "–"
 
-        return jsonify(stats), 200
+        # Auch der Statistik-Aufruf per Code zählt als Geräte-Zugriff
+        return _visitor_response(stats, stats["evening"]["code"])
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:

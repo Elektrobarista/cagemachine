@@ -39,8 +39,16 @@ CREATE TABLE IF NOT EXISTS round_player (
     PRIMARY KEY (round_id, player_id)
 );
 
+CREATE TABLE IF NOT EXISTS evening_access (
+    evening_id   TEXT NOT NULL REFERENCES evening(id),
+    visitor_id   TEXT NOT NULL,
+    last_used_at TEXT NOT NULL,
+    PRIMARY KEY (evening_id, visitor_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_player_evening ON player(evening_id);
 CREATE INDEX IF NOT EXISTS idx_round_evening ON round(evening_id);
+CREATE INDEX IF NOT EXISTS idx_access_visitor ON evening_access(visitor_id);
 """
 
 
