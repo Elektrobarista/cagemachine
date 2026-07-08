@@ -485,31 +485,20 @@
       margin-bottom: 16px;
     }
 
-    /* Teilen-Bereich (auf-/zuklappbar): Link kopieren + QR */
+    /* Kopfleiste der Abend-Karte: Statistik links, Teilen rechts */
+    .card-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* Teilen-Bereich (per Button oben rechts eingeblendet): Link kopieren + QR */
     .share-box {
       margin-top: 16px;
       padding-top: 12px;
       border-top: 1px solid #e8e8e8;
-    }
-
-    .share-box summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: #667eea;
-      list-style: none;
-      user-select: none;
-    }
-
-    .share-box summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .share-box summary::before {
-      content: "▸ ";
-    }
-
-    .share-box[open] summary::before {
-      content: "▾ ";
     }
 
     .share-content {
@@ -578,8 +567,11 @@
   <div class="container">
     <!-- Rage Cage Card -->
     <div class="card">
-      <a href="/statistics" class="nav-link" id="statisticsLink">📊 Statistik anzeigen</a>
-      
+      <div class="card-topbar">
+        <a href="/statistics" class="nav-link" id="statisticsLink">📊 Statistik anzeigen</a>
+        <button class="nav-link" id="btnShareToggle" style="display: none; border: none; cursor: pointer;">🔗 Abend teilen</button>
+      </div>
+
       <h1>🍺 Rage Cage</h1>
       
       <div class="session-controls" id="eveningStartControls">
@@ -625,13 +617,12 @@
           <input type="checkbox" id="randomBullrushToggle" style="width: 20px; height: 20px; cursor: pointer;" />
         </div>
 
-        <details class="share-box" id="shareBox">
-          <summary>🔗 Abend teilen</summary>
+        <div class="share-box" id="shareBox" style="display: none;">
           <div class="share-content">
             <button class="btn btn-secondary btn-small" id="btnCopyLink">🔗 Link kopieren</button>
             <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
           </div>
-        </details>
+        </div>
       </div>
 
       <div id="playerSection" style="display: none;">
@@ -902,6 +893,8 @@
     const eveningNameInput = document.getElementById("eveningNameInput");
     const eveningHistory = document.getElementById("eveningHistory");
     const eveningHistoryList = document.getElementById("eveningHistoryList");
+    const btnShareToggle = document.getElementById("btnShareToggle");
+    const shareBox = document.getElementById("shareBox");
     
     const btnStart = document.getElementById("btnStart");
     const btnPause = document.getElementById("btnPause");
@@ -927,6 +920,7 @@
     let currentEvening = null;   // {code, created_at, players}
     let currentCode = null;
     let currentStatus = "stopped";
+    let activePlayerCount = 0;   // aktive Spieler im aktuellen Abend (Start braucht ≥ 1)
     let gameModes = [];          // von /api/modes
     let selectedMode = "classic";
     let statusPollInterval = null;
@@ -976,6 +970,7 @@
     const LAST_CODE_KEY = "cagemachine:lastEveningCode";
 
     function setEvening(evening) {
+      const prevCode = currentCode;
       currentEvening = evening;
       currentCode = evening ? evening.code : null;
       if (currentCode) {
@@ -986,10 +981,13 @@
           history.replaceState(null, "", targetPath);
         }
         document.getElementById("statisticsLink").href = `/statistics/${currentCode}`;
-        // QR-Code nur bei Code-Wechsel neu laden (vermeidet Flackern)
-        const qr = document.getElementById("shareQr");
-        const qrSrc = `/api/evening/${encodeURIComponent(currentCode)}/qr`;
-        if (qr.getAttribute("src") !== qrSrc) qr.src = qrSrc;
+        // Bei Wechsel des Abends QR neu laden und Teilen-Section zuklappen
+        if (currentCode !== prevCode) {
+          document.getElementById("shareQr").src =
+            `/api/evening/${encodeURIComponent(currentCode)}/qr`;
+          shareBox.style.display = "none";
+          btnShareToggle.textContent = "🔗 Abend teilen";
+        }
       }
       updateEveningUI();
     }
@@ -1142,6 +1140,8 @@
         eveningInfo.style.display = "none";
         playerSection.style.display = "none";
         musicCard.style.display = "none";       // ohne Abend nichts zu steuern
+        btnShareToggle.style.display = "none";
+        shareBox.style.display = "none";        // beim Verlassen zuklappen
         eveningStartControls.style.display = "block";
         resumeGroup.style.display = "flex";
         loadEveningHistory();                   // eigene Abende zum Fortsetzen
@@ -1155,10 +1155,13 @@
       eveningInfo.style.display = "block";
       playerSection.style.display = "block";
       musicCard.style.display = "block";
+      btnShareToggle.style.display = "inline-block";
 
       document.getElementById("eveningCode").textContent = currentEvening.code;
       const players = currentEvening.players || [];
       document.getElementById("playerCount").textContent = players.length;
+      activePlayerCount = players.length;   // Start braucht ≥ 1 Spieler
+      updateButtonStates();
       randomBullrushToggle.checked = !!currentEvening.random_bullrush;
       // Namensfeld nicht überschreiben, während der Nutzer tippt
       if (document.activeElement !== eveningNameInput) {
@@ -1343,7 +1346,8 @@
 
       switch (currentStatus) {
         case "stopped":
-          btnStart.disabled = pendingBullrush;
+          // Start erst ab einem Spieler (ohne Mitspieler keine sinnvolle Runde)
+          btnStart.disabled = pendingBullrush || activePlayerCount < 1;
           btnPause.disabled = true;
           btnStop.disabled = !pendingBullrush;
           btnPause.textContent = "⏸ Pause";
@@ -1397,7 +1401,12 @@
       if (e.key === "Enter") eveningNameInput.blur();
     });
 
-    // Teilen: Link kopieren
+    // Teilen: Button oben rechts blendet die Section an ihrer Stelle ein/aus
+    btnShareToggle.addEventListener("click", () => {
+      const open = shareBox.style.display !== "none";
+      shareBox.style.display = open ? "none" : "block";
+      btnShareToggle.textContent = open ? "🔗 Abend teilen" : "✕ Teilen schließen";
+    });
     document.getElementById("btnCopyLink").addEventListener("click", (e) => {
       if (currentCode) copyWithFeedback(e.currentTarget, eveningLink());
     });
