@@ -284,6 +284,39 @@ def test_evening_overview():
     print("  ✓ Übersicht nur für Geräte, die den Abend per Code geöffnet haben")
 
 
+def test_csv_export():
+    print("\n[TEST 14] CSV-Export als ZIP...")
+    import io
+    import zipfile
+
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Xen", "Yara"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    r = requests.get(f"{BASE_URL}/api/evening/{code}/export")
+    assert r.status_code == 200
+    assert r.headers["Content-Type"] == "application/zip"
+    assert code in r.headers.get("Content-Disposition", "")
+
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    names = zf.namelist()
+    assert any(n.startswith("spieler_") for n in names)
+    assert any(n.startswith("runden_") for n in names)
+
+    players_csv = zf.read(f"spieler_{code}.csv").decode("utf-8-sig")
+    assert players_csv.splitlines()[0].startswith("Name,Runden")
+    assert "Xen" in players_csv and "Yara" in players_csv
+
+    rounds_csv = zf.read(f"runden_{code}.csv").decode("utf-8-sig")
+    assert "Classic" in rounds_csv
+
+    r = requests.get(f"{BASE_URL}/api/evening/XXXX/export")
+    assert r.status_code == 404, "Export zu unbekanntem Code sollte 404 liefern"
+    print("  ✓ ZIP mit spieler_/runden_-CSV, Inhalte korrekt, 404 bei Unbekannt")
+
+
 def test_rate_limit():
     print("\n[TEST 13] Rate-Limit auf die Code-Abfrage...")
     # Nur aussagekräftig, wenn der Server mit niedrigem Limit läuft
@@ -316,5 +349,6 @@ if __name__ == "__main__":
     test_draw_on_start()
     test_readd_player()
     test_evening_overview()
+    test_csv_export()
     test_rate_limit()
     print("\nAlle Tests bestanden ✓")

@@ -234,6 +234,7 @@
     <div class="card">
       <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
         <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;">🍺 Zum laufenden Abend</a>
+        <a href="#" class="nav-link" id="exportLink" style="display: none; background: #f59e0b;">⬇️ CSV-Export</a>
       </div>
       
       <h1>📊 Statistik <span id="eveningCodeTitle" style="color: #667eea;"></span></h1>
@@ -581,11 +582,16 @@
 
     function checkCurrentEvening() {
       const link = document.getElementById("backToEveningLink");
+      const exportLink = document.getElementById("exportLink");
       if (eveningCode) {
         link.href = `/abend/${eveningCode}`;
         link.style.display = "inline-block";
+        // Download der beiden CSVs (Spieler + Runden) als ZIP
+        exportLink.href = `/api/evening/${encodeURIComponent(eveningCode)}/export`;
+        exportLink.style.display = "inline-block";
       } else {
         link.style.display = "none";
+        exportLink.style.display = "none";
       }
     }
 

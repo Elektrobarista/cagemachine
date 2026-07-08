@@ -1,7 +1,10 @@
+import csv
+import io
 import os
 import uuid
+import zipfile
 
-from flask import Flask, render_template, jsonify, request, make_response
+from flask import Flask, render_template, jsonify, request, make_response, send_file
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from game_manager import GameManager, EveningNotFound, GAME_MODES, EVENING_SETTINGS
@@ -227,6 +230,58 @@ def get_evening_statistics(code):
 
         # Auch der Statistik-Aufruf per Code zählt als Geräte-Zugriff
         return _visitor_response(stats, stats["evening"]["code"])
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def _csv_bytes(header, rows):
+    """CSV als Bytes; Komma-getrennt + UTF-8-BOM (Excel erkennt Umlaute).
+    Werte mit Komma werden vom csv-Modul automatisch gequotet."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+    writer.writerows(rows)
+    return buf.getvalue().encode("utf-8-sig")
+
+
+@app.route("/api/evening/<code>/export", methods=["GET"])
+@limiter.limit(lambda: CODE_LOOKUP_LIMIT)
+def export_statistics(code):
+    """Abend-Statistik als ZIP mit zwei CSVs (Spieler-Auswertung + Rundenliste)"""
+    try:
+        stats = game_manager.get_statistics(code)
+        code_up = stats["evening"]["code"]
+
+        players_csv = _csv_bytes(
+            ["Name", "Runden", "Spielzeit (Sek.)", "Spielzeit",
+             "Startbecher", "Teilnahme (%)", "Status"],
+            [[p["name"], p["rounds_played"], round(p["total_duration"]),
+              format_duration(p["total_duration"]), p["start_cups"],
+              p["participation"], "aktiv" if p["active"] else "entfernt"]
+             for p in stats["players"]],
+        )
+        rounds_csv = _csv_bytes(
+            ["Nr", "Gestartet am", "Modus", "Dauer (Sek.)", "Dauer", "Mitspieler"],
+            [[i, r["started_at"],
+              GAME_MODES.get(r["mode"], {}).get("label", r["mode"]),
+              round(r["duration"]) if r["duration"] is not None else "",
+              format_duration(r["duration"]) if r["duration"] is not None else "",
+              r["player_count"]]
+             for i, r in enumerate(stats["rounds"], start=1)],
+        )
+
+        mem = io.BytesIO()
+        with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"spieler_{code_up}.csv", players_csv)
+            zf.writestr(f"runden_{code_up}.csv", rounds_csv)
+        mem.seek(0)
+
+        return send_file(
+            mem, mimetype="application/zip", as_attachment=True,
+            download_name=f"cagemachine_{code_up}.zip",
+        )
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404
     except Exception as e:

@@ -106,6 +106,7 @@ Abende, Spieler, Runden und Statistik:
 - `POST /api/evening/<code>/round/start` - Runde starten (`{"mode": "classic"}`, Spieler-Snapshot)
 - `POST /api/evening/<code>/round/end` - Laufende Runde beenden
 - `GET /api/evening/<code>/statistics` - Abend-Statistik (Spieler-Auswertung, Rundenliste)
+- `GET /api/evening/<code>/export` - Statistik als ZIP mit zwei CSVs (Spieler + Runden)
 - `GET /api/evenings` - Abende, die dieses Gerät geöffnet hat (anonymes Cookie;
   Grundlage der Übersicht auf `/statistics` ohne Code)
 - `GET /api/modes` - Verfügbare Spielmodi
