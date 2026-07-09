@@ -203,11 +203,12 @@ def test_readd_player():
 
     players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
     rita = next(p for p in players if p["name"] == "Rita")
-    requests.delete(f"{BASE_URL}/api/evening/{code}/players/{rita['id']}")
+    # Rita hat gespielt -> nur Deaktivieren moeglich
+    requests.post(f"{BASE_URL}/api/evening/{code}/players/{rita['id']}/deactivate")
 
     stats = requests.get(f"{BASE_URL}/api/evening/{code}/statistics").json()
     rita_stats = next(p for p in stats["players"] if p["name"] == "Rita")
-    assert rita_stats["active"] is False, "Entfernte Spielerin sollte inaktiv sein"
+    assert rita_stats["active"] is False, "Deaktivierte Spielerin sollte inaktiv sein"
 
     # Wieder hinzufügen (andere Schreibweise): reaktiviert dieselbe Spielerin
     r = requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": "rita"})
@@ -373,8 +374,88 @@ def test_delete_evening():
     print("  ✓ Abend mit offener Runde gelöscht, danach 404")
 
 
+def test_deactivate_reactivate():
+    print("\n[TEST 14] Deaktivieren / Reaktivieren ohne Namen neu zu tippen...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Uwe", "Vera", "Wim"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+
+    # Runde spielen, damit Positionen ausgelost sind
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    uwe = next(p for p in players if p["name"] == "Uwe")
+
+    # Deaktivieren: bleibt in der Liste, aber inaktiv und ohne Position
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players/{uwe['id']}/deactivate")
+    assert r.status_code == 200
+    uwe_after = next(p for p in r.json()["evening"]["players"] if p["id"] == uwe["id"])
+    assert uwe_after["active"] is False and uwe_after["position"] is None, \
+        "Deaktivierter Spieler bleibt gelistet, inaktiv, ohne Position"
+
+    # Rundenstart darf den Deaktivierten nicht auslosen
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    uwe_round = next(p for p in r.json()["evening"]["players"] if p["id"] == uwe["id"])
+    assert uwe_round["active"] is False and uwe_round["position"] is None, \
+        "Deaktivierter Spieler darf beim Rundenstart nicht ausgelost werden"
+    stats = requests.get(f"{BASE_URL}/api/evening/{code}/statistics").json()
+    uwe_stats = next((p for p in stats["players"] if p["name"] == "Uwe"), None)
+    assert uwe_stats["rounds_played"] == 1, \
+        "Deaktivierter Spieler spielt die neue Runde nicht mit (nur die erste)"
+
+    # Während laufender Runde sind De- und Reaktivieren gesperrt
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players/{uwe['id']}/reactivate")
+    assert r.status_code != 200, "Reaktivieren darf während laufender Runde nicht gehen"
+    vera = next(p for p in requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+                if p["name"] == "Vera")
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players/{vera['id']}/deactivate")
+    assert r.status_code != 200, "Deaktivieren darf während laufender Runde nicht gehen"
+    now = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    assert next(p for p in now if p["id"] == uwe["id"])["active"] is False, \
+        "Deaktivierter bleibt während der Runde deaktiviert"
+    assert next(p for p in now if p["id"] == vera["id"])["active"] is True, \
+        "Aktiver bleibt während der Runde aktiv"
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    # Reaktivieren: wieder aktiv mit Position, ohne Namen neu einzugeben
+    r = requests.post(f"{BASE_URL}/api/evening/{code}/players/{uwe['id']}/reactivate")
+    assert r.status_code == 200
+    uwe_re = next(p for p in r.json()["evening"]["players"] if p["id"] == uwe["id"])
+    assert uwe_re["active"] is True and uwe_re["position"] is not None, \
+        "Reaktivierter Spieler ist wieder aktiv mit Position"
+    print("  ✓ Deaktivieren/Reaktivieren funktioniert, kein Auslosen im deaktivierten Zustand")
+
+
+def test_hard_remove():
+    print("\n[TEST 15] Hartes Entfernen nur ohne Rundenhistorie...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Xena", "Yanni"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+
+    players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    xena = next(p for p in players if p["name"] == "Xena")
+
+    # Nie gespielt -> hartes Entfernen erlaubt, Spieler verschwindet
+    r = requests.delete(f"{BASE_URL}/api/evening/{code}/players/{xena['id']}")
+    assert r.status_code == 200
+    names = [p["name"] for p in r.json()["evening"]["players"]]
+    assert "Xena" not in names, "Nie gespielter Spieler wird hart entfernt"
+
+    # Yanni spielt eine Runde -> hartes Entfernen jetzt blockiert
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+    players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    yanni = next(p for p in players if p["name"] == "Yanni")
+    r = requests.delete(f"{BASE_URL}/api/evening/{code}/players/{yanni['id']}")
+    assert r.status_code == 400, "Spieler mit Rundenhistorie darf nicht hart entfernt werden"
+    still = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
+    assert any(p["id"] == yanni["id"] for p in still), "Yanni bleibt erhalten"
+    print("  ✓ Hartes Entfernen nur ohne gespielte Runden")
+
+
 def test_rate_limit():
-    print("\n[TEST 13] Rate-Limit auf die Code-Abfrage...")
+    print("\n[TEST 16] Rate-Limit auf die Code-Abfrage...")
     # Nur aussagekräftig, wenn der Server mit niedrigem Limit läuft
     if os.getenv("CODE_LOOKUP_LIMIT") != "5 per minute":
         print("  ✓ übersprungen (CODE_LOOKUP_LIMIT != '5 per minute')")
@@ -409,5 +490,7 @@ if __name__ == "__main__":
     test_evening_name()
     test_evening_qr()
     test_delete_evening()
+    test_deactivate_reactivate()
+    test_hard_remove()
     test_rate_limit()
     print("\nAlle Tests bestanden ✓")

@@ -269,6 +269,35 @@
       background: #dc2626;
     }
 
+    /* Deaktivierte Spieler: ausgegraut, nicht am Tisch */
+    .player-item.inactive { opacity: 0.55; }
+
+    .player-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-toggle {
+      background: #e5e7eb;
+      color: #374151;
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-toggle:hover { background: #d1d5db; }
+
+    .btn-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-reactivate {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-reactivate:hover { background: #059669; }
+
     /* Tisch-Ansicht: Spieler-Chips im Oval, Startbecher hervorgehoben */
     .table-view {
       position: relative;
@@ -1137,6 +1166,26 @@
       }
     };
 
+    window.deactivatePlayer = async function(playerId) {
+      if (!currentCode) return;
+      const data = await apiCall(`/api/evening/${currentCode}/players/${playerId}/deactivate`, "POST");
+      if (data.evening) {
+        setEvening(data.evening);
+      } else if (data.error) {
+        alert(data.error);
+      }
+    };
+
+    window.reactivatePlayer = async function(playerId) {
+      if (!currentCode) return;
+      const data = await apiCall(`/api/evening/${currentCode}/players/${playerId}/reactivate`, "POST");
+      if (data.evening) {
+        setEvening(data.evening);
+      } else if (data.error) {
+        alert(data.error);
+      }
+    };
+
 
     function updateEveningUI() {
       if (!currentEvening) {
@@ -1162,8 +1211,9 @@
 
       document.getElementById("eveningCode").textContent = currentEvening.code;
       const players = currentEvening.players || [];
-      document.getElementById("playerCount").textContent = players.length;
-      activePlayerCount = players.length;   // Start braucht ≥ 1 Spieler
+      const activePlayers = players.filter(p => p.active);
+      document.getElementById("playerCount").textContent = activePlayers.length;
+      activePlayerCount = activePlayers.length;   // Start braucht ≥ 1 aktiven Spieler
       updateButtonStates();
       randomBullrushToggle.checked = !!currentEvening.random_bullrush;
       // Namensfeld nicht überschreiben, während der Nutzer tippt
@@ -1190,7 +1240,7 @@
         // Create player items using safe DOM methods to prevent XSS
         players.forEach(player => {
           const playerItem = document.createElement("div");
-          playerItem.className = "player-item";
+          playerItem.className = "player-item" + (player.active ? "" : " inactive");
 
           const nameWrap = document.createElement("span");
           const isStartCup = player.position && cupPositions.includes(player.position);
@@ -1209,13 +1259,40 @@
           playerName.textContent = isStartCup ? `${player.name} 🍺` : player.name;
           nameWrap.appendChild(playerName);
 
-          const removeBtn = document.createElement("button");
-          removeBtn.className = "btn-remove";
-          removeBtn.textContent = "Entfernen";
-          removeBtn.onclick = () => removePlayer(player.id);
+          const actions = document.createElement("span");
+          actions.className = "player-actions";
+
+          // Aktiv: deaktivieren · Deaktiviert: reaktivieren
+          const toggleBtn = document.createElement("button");
+          if (player.active) {
+            toggleBtn.className = "btn-toggle";
+            toggleBtn.textContent = "Deaktivieren";
+          } else {
+            toggleBtn.className = "btn-toggle btn-reactivate";
+            toggleBtn.textContent = "Reaktivieren";
+          }
+          // Während laufender Runde weder de- noch reaktivieren
+          if (currentEvening.open_round) {
+            toggleBtn.disabled = true;
+            toggleBtn.title = "Während einer laufenden Runde nicht möglich";
+          } else {
+            toggleBtn.onclick = player.active
+              ? () => deactivatePlayer(player.id)
+              : () => reactivatePlayer(player.id);
+          }
+          actions.appendChild(toggleBtn);
+
+          // Hartes Entfernen nur solange nie gespielt
+          if (!player.played) {
+            const removeBtn = document.createElement("button");
+            removeBtn.className = "btn-remove";
+            removeBtn.textContent = "Entfernen";
+            removeBtn.onclick = () => removePlayer(player.id);
+            actions.appendChild(removeBtn);
+          }
 
           playerItem.appendChild(nameWrap);
-          playerItem.appendChild(removeBtn);
+          playerItem.appendChild(actions);
           playerList.appendChild(playerItem);
         });
       }

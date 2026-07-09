@@ -185,9 +185,37 @@ def draw_positions(code):
 
 @app.route("/api/evening/<code>/players/<player_id>", methods=["DELETE"])
 def remove_player(code, player_id):
-    """Deaktiviert einen Spieler (bleibt für Statistik erhalten)"""
+    """Entfernt einen Spieler hart (nur wenn nie gespielt)"""
+    try:
+        evening = game_manager.delete_player(code, player_id)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<code>/players/<player_id>/deactivate", methods=["POST"])
+def deactivate_player(code, player_id):
+    """Deaktiviert einen Spieler (bleibt in Liste + Statistik)"""
     try:
         evening = game_manager.deactivate_player(code, player_id)
+        return jsonify({"evening": evening}), 200
+    except EveningNotFound as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/evening/<code>/players/<player_id>/reactivate", methods=["POST"])
+def reactivate_player(code, player_id):
+    """Reaktiviert einen deaktivierten Spieler"""
+    try:
+        evening = game_manager.reactivate_player(code, player_id)
         return jsonify({"evening": evening}), 200
     except EveningNotFound as e:
         return jsonify({"error": str(e)}), 404
