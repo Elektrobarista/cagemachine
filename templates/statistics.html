@@ -3,6 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <link rel="manifest" href="/static/site.webmanifest" />
+  <meta name="theme-color" content="#667eea" />
   <title>Statistik - Rage Cage</title>
   <style>
     * {
@@ -23,6 +27,17 @@
       max-width: 1000px;
       margin: 0 auto;
     }
+
+    /* Roter Party-Becher als Icon (per <use href="#cupLogo">) */
+    .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .cup-ico { width: 0.85em; height: 1.05em; vertical-align: -0.18em; }
+    .ic {
+      width: 1em; height: 1em; vertical-align: -0.15em;
+      fill: none; stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .empty-state-icon .cup-ico { width: 44px; height: 54px; vertical-align: 0; }
+    .empty-state-icon .ic { width: 44px; height: 44px; vertical-align: 0; }
 
     .card {
       background: white;
@@ -147,7 +162,11 @@
 
     .highlight-icon {
       font-size: 32px;
+      display: flex;
+      align-items: center;
     }
+
+    .highlight-icon .cup-ico { width: 30px; height: 37px; }
 
     .highlight-title {
       font-size: 13px;
@@ -252,14 +271,35 @@
   </style>
 </head>
 <body>
+  <!-- Roter Party-Becher (Solo-Cup) als wiederverwendbares Icon -->
+  <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
+    <symbol id="cupLogo" viewBox="0 0 100 120">
+      <path d="M12 26 L88 26 L72 106 A22 5 0 0 1 28 106 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M15.2 42 Q50 45 84.8 42" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M17.2 52 Q50 55 82.8 52" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M23.6 84 Q50 87 76.4 84" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M25.6 94 Q50 96.5 74.4 94" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <ellipse cx="50" cy="24" rx="40" ry="9" fill="#ef4b45" stroke="#5c0f0c" stroke-width="3"/>
+      <path d="M11 24 A40 9 0 0 0 89 24 Q92 25 95 21 L98 22 Q90 30 78 27 A40 9 0 0 0 11 24 Z" fill="#f6a723" stroke="#c67d0d" stroke-width="1.6"/>
+      <circle cx="42" cy="15" r="11" fill="#fdfdfd" stroke="#c9c9c9" stroke-width="1.4"/>
+    </symbol>
+    <!-- Einheitliches Line-Icon-Set (erbt Farbe via currentColor) -->
+    <symbol id="ic-chart" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+    <symbol id="ic-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="ic-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="ic-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="ic-activity" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  </svg>
+
   <div class="container">
     <div class="card">
       <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;">🍺 Zum laufenden Abend</a>
-        <a href="#" class="nav-link" id="exportLink" style="display: none; background: #f59e0b;">⬇️ CSV-Export</a>
+        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;"><svg class="cup-ico"><use href="#cupLogo"/></svg> Zum laufenden Abend</a>
+        <a href="#" class="nav-link" id="exportLink" style="display: none; background: #f59e0b;"><svg class="ic"><use href="#ic-download"/></svg> CSV-Export</a>
       </div>
       
-      <h1>📊 Statistik <span id="eveningCodeTitle" style="color: #667eea;"></span></h1>
+      <h1><svg class="ic"><use href="#ic-chart"/></svg> Statistik <span id="eveningCodeTitle" style="color: #667eea;"></span></h1>
       <div class="evening-period" id="eveningPeriod" style="display: none;"></div>
 
       <div class="stats-overview" id="statsOverview">
@@ -283,18 +323,20 @@
 
       <div class="highlights" id="highlights" style="display: none;"></div>
 
-      <h2 style="font-size: 20px; margin-bottom: 4px;" id="playersHeading">👥 Spieler</h2>
+      <h2 style="font-size: 20px; margin-bottom: 4px;" id="playersHeading"><svg class="ic"><use href="#ic-users"/></svg> Spieler</h2>
       <div id="playersContainer">
         <div class="loading">Lade Statistik...</div>
       </div>
 
-      <h2 style="font-size: 20px; margin: 28px 0 4px;" id="roundsHeading">🎵 Runden</h2>
+      <h2 style="font-size: 20px; margin: 28px 0 4px;" id="roundsHeading"><svg class="ic"><use href="#ic-music"/></svg> Runden</h2>
       <div id="roundsContainer"></div>
     </div>
   </div>
 
   <script>
     const API_BASE = "";
+    const CUP_SVG = '<svg class="cup-ico"><use href="#cupLogo"></use></svg>';
+    const ic = (id) => `<svg class="ic"><use href="#${id}"></use></svg>`;
     const playersContainer = document.getElementById("playersContainer");
     const roundsContainer = document.getElementById("roundsContainer");
 
@@ -412,13 +454,13 @@
       document.getElementById("statsOverview").style.display = "none";
       document.getElementById("highlights").style.display = "none";
       document.getElementById("roundsHeading").style.display = "none";
-      document.getElementById("playersHeading").textContent = "🍻 Deine Abende";
+      document.getElementById("playersHeading").innerHTML = CUP_SVG + " Deine Abende";
 
       const data = await apiCall("/api/evenings", "GET");
       const evenings = data.evenings || [];
       if (!evenings.length) {
         playersContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon">🍺</div>
+          <div class="empty-state-icon"><svg class="cup-ico"><use href="#cupLogo"/></svg></div>
           <div class="empty-state-text">Kein aktiver Abend ausgewählt</div>
         </div>`;
         return;
@@ -451,12 +493,12 @@
 
       const byTime = [...data.players].sort((a, b) => b.total_duration - a.total_duration)[0];
       if (byTime && byTime.total_duration > 0) {
-        cards.push({ icon: "🏃", title: "Marathon-Spieler",
+        cards.push({ icon: ic("ic-activity"), title: "Marathon-Spieler",
                      value: `${byTime.name} · ${byTime.total_duration_formatted}` });
       }
       const byCups = [...data.players].sort((a, b) => b.start_cups - a.start_cups)[0];
       if (byCups && byCups.start_cups > 0) {
-        cards.push({ icon: "🍺", title: "Becher-Magnet",
+        cards.push({ icon: CUP_SVG, title: "Becher-Magnet",
                      value: `${byCups.name} · ${byCups.start_cups}× Startbecher` });
       }
 
@@ -470,7 +512,9 @@
         card.className = "highlight-card";
         const icon = document.createElement("div");
         icon.className = "highlight-icon";
-        icon.textContent = c.icon;
+        // Emoji als Text, Becher-SVG als Markup
+        if (c.icon.startsWith("<")) icon.innerHTML = c.icon;
+        else icon.textContent = c.icon;
         const text = document.createElement("div");
         const title = document.createElement("div");
         title.className = "highlight-title";
@@ -549,7 +593,7 @@
       // Spieler-Tabelle
       if (!data.players.length) {
         playersContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon">👥</div>
+          <div class="empty-state-icon"><svg class="ic"><use href="#ic-users"/></svg></div>
           <div class="empty-state-text">Noch keine Spieler</div>
         </div>`;
       } else {
@@ -562,7 +606,7 @@
             <td>${esc(p.name)}</td>
             <td>${p.rounds_played}</td>
             <td>${p.total_duration_formatted}</td>
-            <td class="hide-mobile">${p.start_cups > 0 ? p.start_cups + " 🍺" : "–"}</td>
+            <td class="hide-mobile">${p.start_cups > 0 ? p.start_cups + " " + CUP_SVG : "–"}</td>
             <td>${p.participation}%</td>
           </tr>`;
         });
@@ -573,7 +617,7 @@
       // Runden-Tabelle (unsortiert: neueste zuerst)
       if (!data.rounds.length) {
         roundsContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon">🎵</div>
+          <div class="empty-state-icon"><svg class="ic"><use href="#ic-music"/></svg></div>
           <div class="empty-state-text">Noch keine Runden</div>
           <p style="margin-top: 12px; color: #999;">Starte die Musik, um eine Runde zu tracken.</p>
         </div>`;
@@ -592,7 +636,7 @@
           html += `<tr class="${isLongest ? "longest" : ""}">
             <td>${formatDateTime(r.started_at)}</td>
             <td>${esc(modeLabels[r.mode] || r.mode)}</td>
-            <td>${running ? "<span style='color:#10b981;font-weight:600;'>läuft …</span>" : r.duration_formatted + (isLongest ? " ⏱️" : "")}</td>
+            <td>${running ? "<span style='color:#10b981;font-weight:600;'>läuft …</span>" : r.duration_formatted + (isLongest ? " " + ic("ic-clock") : "")}</td>
             <td>${r.player_count}</td>
           </tr>`;
         });

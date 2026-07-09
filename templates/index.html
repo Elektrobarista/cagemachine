@@ -3,20 +3,46 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <link rel="manifest" href="/static/site.webmanifest" />
+  <meta name="theme-color" content="#667eea" />
   <title>Rage Cage</title>
   <style>
+    :root {
+      --brand: #667eea;
+      --brand-2: #764ba2;
+      --cup: #d8352f;
+      --cup-dark: #b91c1c;
+      --add: #10b981;
+      --add-dark: #059669;
+      --pos: #667eea;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
 
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
       min-height: 100vh;
       padding: 20px;
       color: #333;
+    }
+
+    /* Roter Party-Becher als Icon (per <use href="#cupLogo">) */
+    .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .cup-ico { width: 0.85em; height: 1.05em; vertical-align: -0.18em; }
+    .cup-title { width: 1em; height: 1.25em; vertical-align: -0.22em; }
+
+    /* Einheitliche Line-Icons (Farbe via currentColor) */
+    .ic {
+      width: 1em; height: 1em; vertical-align: -0.15em;
+      fill: none; stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
     }
 
     .container {
@@ -196,7 +222,7 @@
     }
 
     .player-pos.startbecher {
-      background: #f59e0b;
+      background: var(--cup);
     }
 
     /* Spielmodus-Auswahl */
@@ -256,7 +282,7 @@
     }
 
     .btn-remove {
-      background: #ef4444;
+      background: var(--cup);
       color: white;
       padding: 6px 12px;
       font-size: 12px;
@@ -266,7 +292,7 @@
     }
 
     .btn-remove:hover {
-      background: #dc2626;
+      background: var(--cup-dark);
     }
 
     /* Deaktivierte Spieler: ausgegraut, nicht am Tisch */
@@ -316,14 +342,17 @@
       box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.18);
     }
 
-    .table-oval::after {
-      content: "🍻";
+    /* Becher-Pyramide in der Tisch-Mitte */
+    .cup-tower {
       position: absolute;
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      font-size: 40px;
-      filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+      width: 62px;
+      height: auto;
+      filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.4));
+      pointer-events: none;
+      z-index: 0;
     }
 
     .seat-chip {
@@ -352,18 +381,19 @@
     }
 
     .seat-chip.startbecher .seat-avatar {
-      border-color: #f59e0b;
-      box-shadow: 0 0 14px rgba(245, 158, 11, 0.85);
+      border-color: var(--cup);
+      box-shadow: 0 0 14px rgba(216, 53, 47, 0.85);
     }
 
     .seat-cup {
       position: absolute;
-      right: -12px;
-      top: -12px;
-      font-size: 20px;
+      right: -14px;
+      top: -14px;
       filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
       display: none;
     }
+
+    .seat-cup svg { width: 20px; height: 24px; display: block; }
 
     .seat-chip.startbecher .seat-cup {
       display: block;
@@ -434,12 +464,12 @@
     }
 
     .btn-stop {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      background: linear-gradient(135deg, var(--cup) 0%, var(--cup-dark) 100%);
       color: white;
     }
 
     .btn-danger {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      background: linear-gradient(135deg, var(--cup) 0%, var(--cup-dark) 100%);
       color: white;
       font-size: 18px;
       padding: 20px 24px;
@@ -447,7 +477,7 @@
     }
 
     .btn-danger:hover:not(:disabled) {
-      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      background: linear-gradient(135deg, var(--cup-dark) 0%, #7f1414 100%);
       transform: translateY(-2px);
       box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
     }
@@ -599,15 +629,63 @@
   </style>
 </head>
 <body>
+  <!-- Roter Party-Becher (Solo-Cup) als wiederverwendbares Icon -->
+  <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
+    <symbol id="cupLogo" viewBox="0 0 100 120">
+      <path d="M12 26 L88 26 L72 106 A22 5 0 0 1 28 106 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M15.2 42 Q50 45 84.8 42" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M17.2 52 Q50 55 82.8 52" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M23.6 84 Q50 87 76.4 84" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M25.6 94 Q50 96.5 74.4 94" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <ellipse cx="50" cy="24" rx="40" ry="9" fill="#ef4b45" stroke="#5c0f0c" stroke-width="3"/>
+      <path d="M11 24 A40 9 0 0 0 89 24 Q92 25 95 21 L98 22 Q90 30 78 27 A40 9 0 0 0 11 24 Z" fill="#f6a723" stroke="#c67d0d" stroke-width="1.6"/>
+      <circle cx="42" cy="15" r="11" fill="#fdfdfd" stroke="#c9c9c9" stroke-width="1.4"/>
+    </symbol>
+    <symbol id="towerLogo" viewBox="0 0 108 118">
+      <!-- Beer-Pong-Pyramide 3-2-1, von hinten nach vorn gezeichnet -->
+      <g>
+        <path d="M43 22 L65 22 L62 48 A8 2.2 0 0 1 46 48 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="54" cy="22" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="54" cy="22.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M31 46 L53 46 L50 72 A8 2.2 0 0 1 34 72 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="42" cy="46" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="42" cy="46.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M55 46 L77 46 L74 72 A8 2.2 0 0 1 58 72 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="66" cy="46" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="66" cy="46.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M19 70 L41 70 L38 96 A8 2.2 0 0 1 22 96 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="30" cy="70" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="30" cy="70.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M43 70 L65 70 L62 96 A8 2.2 0 0 1 46 96 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="54" cy="70" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="54" cy="70.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M67 70 L89 70 L86 96 A8 2.2 0 0 1 70 96 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="78" cy="70" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="78" cy="70.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+    </symbol>
+    <!-- Einheitliches Line-Icon-Set (erbt Farbe via currentColor) -->
+    <symbol id="ic-chart" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+    <symbol id="ic-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="ic-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="ic-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></symbol>
+    <symbol id="ic-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="ic-bolt" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  </svg>
+
   <div class="container">
     <!-- Rage Cage Card -->
     <div class="card">
       <div class="card-topbar">
-        <a href="/statistics" class="nav-link" id="statisticsLink">📊 Statistik anzeigen</a>
-        <button class="nav-link" id="btnShareToggle" style="display: none; border: none; cursor: pointer;">🔗 Abend teilen</button>
+        <a href="/statistics" class="nav-link" id="statisticsLink"><svg class="ic"><use href="#ic-chart"/></svg> Statistik anzeigen</a>
+        <button class="nav-link" id="btnShareToggle" style="display: none; border: none; cursor: pointer;"><svg class="ic"><use href="#ic-link"/></svg> Abend teilen</button>
       </div>
 
-      <h1>🍺 Rage Cage</h1>
+      <h1><svg class="cup-ico cup-title"><use href="#cupLogo"/></svg> Rage Cage</h1>
       
       <div class="session-controls" id="eveningStartControls">
         <button class="btn btn-primary" id="btnCreateEvening">Neuen Abend starten</button>
@@ -648,13 +726,13 @@
           <span class="session-info-value" id="playerCount">0</span>
         </div>
         <div class="session-info-item">
-          <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden">🐂 Zufalls-Bullrush:</span>
+          <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden"><svg class="ic"><use href="#ic-bolt"/></svg> Zufalls-Bullrush:</span>
           <input type="checkbox" id="randomBullrushToggle" style="width: 20px; height: 20px; cursor: pointer;" />
         </div>
 
         <div class="share-box" id="shareBox" style="display: none;">
           <div class="share-content">
-            <button class="btn btn-secondary btn-small" id="btnCopyLink">🔗 Link kopieren</button>
+            <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic"><use href="#ic-link"/></svg> Link kopieren</button>
             <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
           </div>
         </div>
@@ -674,24 +752,26 @@
         </div>
 
         <div class="table-view" id="tableView" style="display: none;">
-          <div class="table-oval"></div>
+          <div class="table-oval">
+            <svg class="cup-tower"><use href="#towerLogo"/></svg>
+          </div>
         </div>
 
         <div class="player-list" id="playerList">
           <div class="empty-state">
-            <div class="empty-state-icon">👥</div>
+            <div class="empty-state-icon"><svg class="ic"><use href="#ic-users"/></svg></div>
             <div>Noch keine Spieler hinzugefügt</div>
           </div>
         </div>
 
-        <button class="btn btn-remove" id="btnDeleteEvening" style="width: 100%; margin-top: 24px; padding: 12px;">🗑️ Abend löschen</button>
+        <button class="btn btn-remove" id="btnDeleteEvening" style="width: 100%; margin-top: 24px; padding: 12px;"><svg class="ic"><use href="#ic-trash"/></svg> Abend löschen</button>
       </div>
 
     </div>
 
     <!-- Music Control Card -->
     <div class="card" id="musicCard">
-      <h1>🎵 Musik Steuerung</h1>
+      <h1><svg class="ic"><use href="#ic-music"/></svg> Musik Steuerung</h1>
 
       <div class="mode-select" id="modeSelect"></div>
 
@@ -708,7 +788,7 @@
 
       <div class="status" id="status">Status: bereit</div>
       <div id="multiRoundInfo" style="display: none;"></div>
-      <div id="bullrushBanner" style="display: none;">🐂 BULLRUSH!</div>
+      <div id="bullrushBanner" style="display: none;"><svg class="ic"><use href="#ic-bolt"/></svg> BULLRUSH!</div>
       
       <div class="scrubber-container" style="display: none;">
         <div class="scrubber-wrapper">
@@ -723,6 +803,10 @@
   </div>
 
   <script>
+    // Icons zum Einfügen in dynamisch erzeugte Elemente
+    const CUP_SVG = '<svg class="cup-ico"><use href="#cupLogo"></use></svg>';
+    const ic = (id) => `<svg class="ic"><use href="#${id}"></use></svg>`;
+
     // API-Endpunkte
     const API_BASE = "";
     
@@ -1018,7 +1102,7 @@
           document.getElementById("shareQr").src =
             `/api/evening/${encodeURIComponent(currentCode)}/qr`;
           shareBox.style.display = "none";
-          btnShareToggle.textContent = "🔗 Abend teilen";
+          btnShareToggle.innerHTML = ic("ic-link") + " Abend teilen";
         }
       }
       updateEveningUI();
@@ -1225,7 +1309,7 @@
       if (players.length === 0) {
         playerList.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon">👥</div>
+            <div class="empty-state-icon"><svg class="ic"><use href="#ic-users"/></svg></div>
             <div>Noch keine Spieler hinzugefügt</div>
           </div>
         `;
@@ -1255,8 +1339,9 @@
 
           const playerName = document.createElement("span");
           playerName.className = "player-name";
-          // textContent automatically escapes HTML
-          playerName.textContent = isStartCup ? `${player.name} 🍺` : player.name;
+          // Name via textContent (XSS-sicher); Becher-Icon als statisches SVG anhängen
+          playerName.textContent = player.name;
+          if (isStartCup) playerName.insertAdjacentHTML("beforeend", " " + CUP_SVG);
           nameWrap.appendChild(playerName);
 
           const actions = document.createElement("span");
@@ -1346,7 +1431,7 @@
           avatar.style.background = playerColor(player.id);
           const cup = document.createElement("span");
           cup.className = "seat-cup";
-          cup.textContent = "🍺";
+          cup.innerHTML = CUP_SVG;
           avatar.appendChild(cup);
 
           const name = document.createElement("span");
@@ -1479,7 +1564,7 @@
     btnShareToggle.addEventListener("click", () => {
       const open = shareBox.style.display !== "none";
       shareBox.style.display = open ? "none" : "block";
-      btnShareToggle.textContent = open ? "🔗 Abend teilen" : "✕ Teilen schließen";
+      btnShareToggle.innerHTML = open ? ic("ic-link") + " Abend teilen" : "✕ Teilen schließen";
     });
     document.getElementById("btnCopyLink").addEventListener("click", (e) => {
       if (currentCode) copyWithFeedback(e.currentTarget, eveningLink());
@@ -1574,7 +1659,7 @@
     function updateMultiRoundUI() {
       if (multiRound.total > 1) {
         multiRoundInfo.style.display = "block";
-        multiRoundInfo.textContent = `🐂 Bullrush: Runde ${multiRound.current}/${multiRound.total}`;
+        multiRoundInfo.innerHTML = ic("ic-bolt") + ` Bullrush: Runde ${multiRound.current}/${multiRound.total}`;
       } else {
         multiRoundInfo.style.display = "none";
       }
