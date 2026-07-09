@@ -32,6 +32,12 @@
       margin-bottom: 24px;
     }
 
+    @media (max-width: 768px) {
+      body { padding: 12px; }
+      .card { padding: 20px; }
+      h1 { font-size: 26px; }
+    }
+
     h1 {
       font-size: 32px;
       margin-bottom: 8px;
@@ -204,6 +210,22 @@
 
     .games-table tr.longest:hover {
       background: #fdf6e0;
+    }
+
+    /* Mobile Tabellen-Overrides: NACH den Basisregeln (gleiche Spezifitaet, spaeter gewinnt) */
+    @media (max-width: 768px) {
+      .games-table .hide-mobile { display: none; }
+      .games-table th, .games-table td { padding: 6px 5px; font-size: 13px; }
+      /* Lange Koepfe duerfen umbrechen statt Spalten aufzublaehen */
+      .games-table th.sortable { white-space: normal; vertical-align: bottom; }
+      /* Nur lange Spielernamen kuerzen; Runden-Datum bleibt einzeilig ganz */
+      #playersContainer .games-table td:first-child {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #roundsContainer .games-table td:first-child { white-space: nowrap; }
     }
 
 
@@ -474,7 +496,7 @@
       { key: "name", label: "Spieler", value: p => p.name.toLowerCase() },
       { key: "rounds", label: "Runden", value: p => p.rounds_played },
       { key: "time", label: "Spielzeit", value: p => p.total_duration },
-      { key: "cups", label: "Startbecher", value: p => p.start_cups },
+      { key: "cups", label: "Startbecher", value: p => p.start_cups, hideMobile: true },
       { key: "quota", label: "Quote", value: p => p.participation },
     ];
 
@@ -499,7 +521,8 @@
     function headerRow(columns, state, tableName) {
       const cells = columns.map(c => {
         const arrow = state.key === c.key ? (state.dir === 1 ? " ▲" : " ▼") : "";
-        return `<th class="sortable" data-table="${tableName}" data-key="${c.key}">${c.label}${arrow}</th>`;
+        const cls = "sortable" + (c.hideMobile ? " hide-mobile" : "");
+        return `<th class="${cls}" data-table="${tableName}" data-key="${c.key}">${c.label}${arrow}</th>`;
       });
       return `<tr>${cells.join("")}</tr>`;
     }
@@ -539,7 +562,7 @@
             <td>${esc(p.name)}</td>
             <td>${p.rounds_played}</td>
             <td>${p.total_duration_formatted}</td>
-            <td>${p.start_cups > 0 ? p.start_cups + " 🍺" : "–"}</td>
+            <td class="hide-mobile">${p.start_cups > 0 ? p.start_cups + " 🍺" : "–"}</td>
             <td>${p.participation}%</td>
           </tr>`;
         });

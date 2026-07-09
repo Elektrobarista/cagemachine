@@ -29,8 +29,12 @@
 
     @media (max-width: 768px) {
       .container {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);   /* Track darf nicht ueber Viewport wachsen */
       }
+      body { padding: 12px; }
+      .card { padding: 20px; }
+      h1 { font-size: 26px; }
+      h2 { font-size: 20px; }
     }
 
     .card {
@@ -130,6 +134,7 @@
 
     .input {
       flex: 1;
+      min-width: 0;   /* darf in Flex-Zeile schrumpfen */
       padding: 14px 18px;
       border: 2px solid #e0e0e0;
       border-radius: 8px;
@@ -364,6 +369,7 @@
       .music-controls {
         grid-template-columns: 1fr;
       }
+      .btn-music { padding: 20px 24px; font-size: 20px; }
     }
 
     .btn-music {
