@@ -179,12 +179,12 @@
     }
 
     .btn-add {
-      background: #10b981;
+      background: var(--add);
       color: white;
     }
 
     .btn-add:hover {
-      background: #059669;
+      background: var(--add-dark);
     }
 
     /* Player List */
@@ -215,7 +215,7 @@
       height: 26px;
       margin-right: 10px;
       border-radius: 50%;
-      background: #667eea;
+      background: var(--pos);
       color: white;
       font-size: 13px;
       font-weight: 700;
@@ -318,11 +318,11 @@
     .btn-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .btn-reactivate {
-      background: #10b981;
+      background: var(--add);
       color: white;
     }
 
-    .btn-reactivate:hover { background: #059669; }
+    .btn-reactivate:hover { background: var(--add-dark); }
 
     /* Tisch-Ansicht: Spieler-Chips im Oval, Startbecher hervorgehoben */
     .table-view {
@@ -450,12 +450,12 @@
     }
 
     .btn-start {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      background: linear-gradient(135deg, var(--add) 0%, var(--add-dark) 100%);
       color: white;
     }
 
     .btn-start:hover:not(:disabled) {
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      background: linear-gradient(135deg, var(--add-dark) 0%, #047857 100%);
     }
 
     .btn-pause {
@@ -681,11 +681,11 @@
     <!-- Rage Cage Card -->
     <div class="card">
       <div class="card-topbar">
-        <a href="/statistics" class="nav-link" id="statisticsLink"><svg class="ic"><use href="#ic-chart"/></svg> Statistik anzeigen</a>
-        <button class="nav-link" id="btnShareToggle" style="display: none; border: none; cursor: pointer;"><svg class="ic"><use href="#ic-link"/></svg> Abend teilen</button>
+        <a href="/statistics" class="nav-link" id="statisticsLink"><svg class="ic" aria-hidden="true"><use href="#ic-chart" xlink:href="#ic-chart"/></svg> Statistik anzeigen</a>
+        <button class="nav-link" id="btnShareToggle" style="display: none; border: none; cursor: pointer;"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Abend teilen</button>
       </div>
 
-      <h1><svg class="cup-ico cup-title"><use href="#cupLogo"/></svg> Rage Cage</h1>
+      <h1><svg class="cup-ico cup-title" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Rage Cage</h1>
       
       <div class="session-controls" id="eveningStartControls">
         <button class="btn btn-primary" id="btnCreateEvening">Neuen Abend starten</button>
@@ -726,13 +726,13 @@
           <span class="session-info-value" id="playerCount">0</span>
         </div>
         <div class="session-info-item">
-          <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden"><svg class="ic"><use href="#ic-bolt"/></svg> Zufalls-Bullrush:</span>
+          <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden"><svg class="ic" aria-hidden="true"><use href="#ic-bolt" xlink:href="#ic-bolt"/></svg> Zufalls-Bullrush:</span>
           <input type="checkbox" id="randomBullrushToggle" style="width: 20px; height: 20px; cursor: pointer;" />
         </div>
 
         <div class="share-box" id="shareBox" style="display: none;">
           <div class="share-content">
-            <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic"><use href="#ic-link"/></svg> Link kopieren</button>
+            <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Link kopieren</button>
             <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
           </div>
         </div>
@@ -753,25 +753,25 @@
 
         <div class="table-view" id="tableView" style="display: none;">
           <div class="table-oval">
-            <svg class="cup-tower"><use href="#towerLogo"/></svg>
+            <svg class="cup-tower" aria-hidden="true"><use href="#towerLogo" xlink:href="#towerLogo"/></svg>
           </div>
         </div>
 
         <div class="player-list" id="playerList">
           <div class="empty-state">
-            <div class="empty-state-icon"><svg class="ic"><use href="#ic-users"/></svg></div>
+            <div class="empty-state-icon"><svg class="ic" aria-hidden="true"><use href="#ic-users" xlink:href="#ic-users"/></svg></div>
             <div>Noch keine Spieler hinzugefügt</div>
           </div>
         </div>
 
-        <button class="btn btn-remove" id="btnDeleteEvening" style="width: 100%; margin-top: 24px; padding: 12px;"><svg class="ic"><use href="#ic-trash"/></svg> Abend löschen</button>
+        <button class="btn btn-remove" id="btnDeleteEvening" style="width: 100%; margin-top: 24px; padding: 12px;"><svg class="ic" aria-hidden="true"><use href="#ic-trash" xlink:href="#ic-trash"/></svg> Abend löschen</button>
       </div>
 
     </div>
 
     <!-- Music Control Card -->
     <div class="card" id="musicCard">
-      <h1><svg class="ic"><use href="#ic-music"/></svg> Musik Steuerung</h1>
+      <h1><svg class="ic" aria-hidden="true"><use href="#ic-music" xlink:href="#ic-music"/></svg> Musik Steuerung</h1>
 
       <div class="mode-select" id="modeSelect"></div>
 
@@ -788,7 +788,7 @@
 
       <div class="status" id="status">Status: bereit</div>
       <div id="multiRoundInfo" style="display: none;"></div>
-      <div id="bullrushBanner" style="display: none;"><svg class="ic"><use href="#ic-bolt"/></svg> BULLRUSH!</div>
+      <div id="bullrushBanner" style="display: none;"><svg class="ic" aria-hidden="true"><use href="#ic-bolt" xlink:href="#ic-bolt"/></svg> BULLRUSH!</div>
       
       <div class="scrubber-container" style="display: none;">
         <div class="scrubber-wrapper">
@@ -804,8 +804,8 @@
 
   <script>
     // Icons zum Einfügen in dynamisch erzeugte Elemente
-    const CUP_SVG = '<svg class="cup-ico"><use href="#cupLogo"></use></svg>';
-    const ic = (id) => `<svg class="ic"><use href="#${id}"></use></svg>`;
+    const CUP_SVG = '<svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"></use></svg>';
+    const ic = (id) => `<svg class="ic" aria-hidden="true"><use href="#${id}" xlink:href="#${id}"></use></svg>`;
 
     // API-Endpunkte
     const API_BASE = "";
@@ -1309,7 +1309,7 @@
       if (players.length === 0) {
         playerList.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon"><svg class="ic"><use href="#ic-users"/></svg></div>
+            <div class="empty-state-icon"><svg class="ic" aria-hidden="true"><use href="#ic-users" xlink:href="#ic-users"/></svg></div>
             <div>Noch keine Spieler hinzugefügt</div>
           </div>
         `;

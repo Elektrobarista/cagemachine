@@ -295,11 +295,11 @@
   <div class="container">
     <div class="card">
       <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;"><svg class="cup-ico"><use href="#cupLogo"/></svg> Zum laufenden Abend</a>
-        <a href="#" class="nav-link" id="exportLink" style="display: none; background: #f59e0b;"><svg class="ic"><use href="#ic-download"/></svg> CSV-Export</a>
+        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: #10b981;"><svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Zum laufenden Abend</a>
+        <a href="#" class="nav-link" id="exportLink" style="display: none; background: #f59e0b;"><svg class="ic" aria-hidden="true"><use href="#ic-download" xlink:href="#ic-download"/></svg> CSV-Export</a>
       </div>
       
-      <h1><svg class="ic"><use href="#ic-chart"/></svg> Statistik <span id="eveningCodeTitle" style="color: #667eea;"></span></h1>
+      <h1><svg class="ic" aria-hidden="true"><use href="#ic-chart" xlink:href="#ic-chart"/></svg> Statistik <span id="eveningCodeTitle" style="color: #667eea;"></span></h1>
       <div class="evening-period" id="eveningPeriod" style="display: none;"></div>
 
       <div class="stats-overview" id="statsOverview">
@@ -323,20 +323,20 @@
 
       <div class="highlights" id="highlights" style="display: none;"></div>
 
-      <h2 style="font-size: 20px; margin-bottom: 4px;" id="playersHeading"><svg class="ic"><use href="#ic-users"/></svg> Spieler</h2>
+      <h2 style="font-size: 20px; margin-bottom: 4px;" id="playersHeading"><svg class="ic" aria-hidden="true"><use href="#ic-users" xlink:href="#ic-users"/></svg> Spieler</h2>
       <div id="playersContainer">
         <div class="loading">Lade Statistik...</div>
       </div>
 
-      <h2 style="font-size: 20px; margin: 28px 0 4px;" id="roundsHeading"><svg class="ic"><use href="#ic-music"/></svg> Runden</h2>
+      <h2 style="font-size: 20px; margin: 28px 0 4px;" id="roundsHeading"><svg class="ic" aria-hidden="true"><use href="#ic-music" xlink:href="#ic-music"/></svg> Runden</h2>
       <div id="roundsContainer"></div>
     </div>
   </div>
 
   <script>
     const API_BASE = "";
-    const CUP_SVG = '<svg class="cup-ico"><use href="#cupLogo"></use></svg>';
-    const ic = (id) => `<svg class="ic"><use href="#${id}"></use></svg>`;
+    const CUP_SVG = '<svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"></use></svg>';
+    const ic = (id) => `<svg class="ic" aria-hidden="true"><use href="#${id}" xlink:href="#${id}"></use></svg>`;
     const playersContainer = document.getElementById("playersContainer");
     const roundsContainer = document.getElementById("roundsContainer");
 
@@ -460,7 +460,7 @@
       const evenings = data.evenings || [];
       if (!evenings.length) {
         playersContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon"><svg class="cup-ico"><use href="#cupLogo"/></svg></div>
+          <div class="empty-state-icon"><svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg></div>
           <div class="empty-state-text">Kein aktiver Abend ausgewählt</div>
         </div>`;
         return;
@@ -593,7 +593,7 @@
       // Spieler-Tabelle
       if (!data.players.length) {
         playersContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon"><svg class="ic"><use href="#ic-users"/></svg></div>
+          <div class="empty-state-icon"><svg class="ic" aria-hidden="true"><use href="#ic-users" xlink:href="#ic-users"/></svg></div>
           <div class="empty-state-text">Noch keine Spieler</div>
         </div>`;
       } else {
@@ -617,7 +617,7 @@
       // Runden-Tabelle (unsortiert: neueste zuerst)
       if (!data.rounds.length) {
         roundsContainer.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon"><svg class="ic"><use href="#ic-music"/></svg></div>
+          <div class="empty-state-icon"><svg class="ic" aria-hidden="true"><use href="#ic-music" xlink:href="#ic-music"/></svg></div>
           <div class="empty-state-text">Noch keine Runden</div>
           <p style="margin-top: 12px; color: #999;">Starte die Musik, um eine Runde zu tracken.</p>
         </div>`;
