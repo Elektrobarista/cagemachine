@@ -1,5 +1,4 @@
 """Helper-Funktionen für die Anwendung"""
-from datetime import datetime
 
 
 def format_duration(seconds):

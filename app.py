@@ -9,8 +9,11 @@ import qrcode.image.svg
 from flask import Flask, render_template, jsonify, request, make_response, send_file, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
-from game_manager import GameManager, EveningNotFound, GAME_MODES, EVENING_SETTINGS
+from game_manager import (
+    GameManager, EveningNotFound, PlayerNotFound, GAME_MODES, EVENING_SETTINGS,
+)
 from utils import format_duration
 
 app = Flask(__name__)
@@ -41,6 +44,26 @@ VISITOR_COOKIE = "cagemachine_visitor"
 def ratelimit_handler(e):
     """Rate-Limit als JSON statt HTML"""
     return jsonify({"error": "Zu viele Anfragen – bitte kurz warten."}), 429
+
+
+# Zentrale Fehler-Zuordnung: Endpoints werfen nur noch, das Mapping steht hier
+@app.errorhandler(EveningNotFound)
+@app.errorhandler(PlayerNotFound)
+def _handle_not_found(e):
+    return jsonify({"error": str(e)}), 404
+
+
+@app.errorhandler(ValueError)
+def _handle_bad_request(e):
+    return jsonify({"error": str(e)}), 400
+
+
+@app.errorhandler(Exception)
+def _handle_unexpected(e):
+    # HTTP-Fehler (404-Routing, 429 …) behalten ihre eigene Behandlung
+    if isinstance(e, HTTPException):
+        return e
+    return jsonify({"error": str(e)}), 500
 
 
 def _visitor_response(payload, evening_code):
@@ -83,211 +106,126 @@ def get_modes():
 
 
 # Evening-API-Endpunkte
+# Fehler (EveningNotFound/PlayerNotFound → 404, ValueError → 400, sonst 500)
+# werden zentral von den errorhandlern oben abgebildet.
 @app.route("/api/evening", methods=["POST"])
 def create_evening():
     """Erstellt einen neuen Abend und liefert dessen Code"""
-    try:
-        evening = game_manager.create_evening()
-        return _visitor_response({"evening": evening}, evening["code"])
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.create_evening()
+    return _visitor_response({"evening": evening}, evening["code"])
 
 
 @app.route("/api/evening/<code>", methods=["GET"])
 @limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def get_evening(code):
     """Lädt einen Abend über seinen Code (Wiederaufnahme)"""
-    try:
-        evening = game_manager.get_evening(code)
-        return _visitor_response({"evening": evening}, evening["code"])
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.get_evening(code)
+    return _visitor_response({"evening": evening}, evening["code"])
 
 
 @app.route("/api/evening/<code>", methods=["DELETE"])
 def delete_evening(code):
     """Löscht einen Abend samt aller zugehörigen Daten (unumkehrbar)"""
-    try:
-        game_manager.delete_evening(code)
-        return jsonify({"deleted": True}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    game_manager.delete_evening(code)
+    return jsonify({"deleted": True}), 200
 
 
 @app.route("/api/evening/<code>/qr", methods=["GET"])
 @limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def evening_qr(code):
     """QR-Code (SVG) des teilbaren Abend-Links"""
-    try:
-        evening = game_manager.get_evening(code)
-        link = f"{request.host_url}abend/{evening['code']}"
-        img = qrcode.make(link, image_factory=qrcode.image.svg.SvgPathImage,
-                          box_size=10, border=2)
-        buf = io.BytesIO()
-        img.save(buf)
-        return Response(buf.getvalue(), mimetype="image/svg+xml")
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.get_evening(code)
+    link = f"{request.host_url}abend/{evening['code']}"
+    img = qrcode.make(link, image_factory=qrcode.image.svg.SvgPathImage,
+                      box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    return Response(buf.getvalue(), mimetype="image/svg+xml")
 
 
 @app.route("/api/evenings", methods=["GET"])
 def list_evenings():
     """Abende, die dieses Gerät kennt (für die Statistik-Übersicht)"""
-    try:
-        visitor_id = request.cookies.get(VISITOR_COOKIE)
-        evenings = game_manager.list_evenings(visitor_id) if visitor_id else []
-        return jsonify({"evenings": evenings}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    visitor_id = request.cookies.get(VISITOR_COOKIE)
+    evenings = game_manager.list_evenings(visitor_id) if visitor_id else []
+    return jsonify({"evenings": evenings}), 200
 
 
 @app.route("/api/evening/<code>/players", methods=["POST"])
 def add_player(code):
     """Fügt einen Spieler zum Abend hinzu"""
-    try:
-        data = request.get_json(silent=True) or {}
-        player_name = data.get("name", "").strip()
+    data = request.get_json(silent=True) or {}
+    player_name = data.get("name", "").strip()
 
-        if not player_name:
-            return jsonify({"error": "Spielername darf nicht leer sein"}), 400
-        if len(player_name) > 50:
-            return jsonify({"error": "Spielername darf maximal 50 Zeichen lang sein"}), 400
+    if not player_name:
+        return jsonify({"error": "Spielername darf nicht leer sein"}), 400
+    if len(player_name) > 50:
+        return jsonify({"error": "Spielername darf maximal 50 Zeichen lang sein"}), 400
 
-        evening = game_manager.add_player(code, player_name)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/evening/<code>/draw", methods=["POST"])
-def draw_positions(code):
-    """Lost die Sitzpositionen aus (1 = Startbecher)"""
-    try:
-        evening = game_manager.draw_positions(code)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.add_player(code, player_name)
+    return jsonify({"evening": evening}), 200
 
 
 @app.route("/api/evening/<code>/players/<player_id>", methods=["DELETE"])
 def remove_player(code, player_id):
     """Entfernt einen Spieler hart (nur wenn nie gespielt)"""
-    try:
-        evening = game_manager.delete_player(code, player_id)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.delete_player(code, player_id)
+    return jsonify({"evening": evening}), 200
 
 
 @app.route("/api/evening/<code>/players/<player_id>/deactivate", methods=["POST"])
 def deactivate_player(code, player_id):
     """Deaktiviert einen Spieler (bleibt in Liste + Statistik)"""
-    try:
-        evening = game_manager.deactivate_player(code, player_id)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.deactivate_player(code, player_id)
+    return jsonify({"evening": evening}), 200
 
 
 @app.route("/api/evening/<code>/players/<player_id>/reactivate", methods=["POST"])
 def reactivate_player(code, player_id):
     """Reaktiviert einen deaktivierten Spieler"""
-    try:
-        evening = game_manager.reactivate_player(code, player_id)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.reactivate_player(code, player_id)
+    return jsonify({"evening": evening}), 200
 
 
 @app.route("/api/evening/<code>/name", methods=["POST"])
 def set_evening_name(code):
     """Setzt den optionalen Abend-Namen (leer = kein Name)"""
-    try:
-        data = request.get_json(silent=True) or {}
-        evening = game_manager.set_name(code, data.get("name", ""))
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    data = request.get_json(silent=True) or {}
+    evening = game_manager.set_name(code, data.get("name", ""))
+    return jsonify({"evening": evening}), 200
 
 
 @app.route("/api/evening/<code>/settings", methods=["POST"])
 def update_settings(code):
-    """Abend-Einstellungen ändern (random_bullrush, draw_on_start)"""
-    try:
-        data = request.get_json(silent=True) or {}
-        requested = {key: data[key] for key in EVENING_SETTINGS if key in data}
-        if not requested:
-            return jsonify({"error": f"Erwartet eine Einstellung aus: {', '.join(EVENING_SETTINGS)}"}), 400
-        for key, enabled in requested.items():
-            if not isinstance(enabled, bool):
-                return jsonify({"error": f"{key} muss true oder false sein"}), 400
+    """Abend-Einstellungen ändern (random_bullrush)"""
+    data = request.get_json(silent=True) or {}
+    requested = {key: data[key] for key in EVENING_SETTINGS if key in data}
+    if not requested:
+        return jsonify({"error": f"Erwartet eine Einstellung aus: {', '.join(EVENING_SETTINGS)}"}), 400
+    for key, enabled in requested.items():
+        if not isinstance(enabled, bool):
+            return jsonify({"error": f"{key} muss true oder false sein"}), 400
 
-        for key, enabled in requested.items():
-            evening = game_manager.set_setting(code, key, enabled)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    for key, enabled in requested.items():
+        evening = game_manager.set_setting(code, key, enabled)
+    return jsonify({"evening": evening}), 200
 
 
 # Runden-API-Endpunkte
 @app.route("/api/evening/<code>/round/start", methods=["POST"])
 def start_round(code):
     """Startet eine Runde mit Snapshot der aktiven Spieler"""
-    try:
-        data = request.get_json(silent=True) or {}
-        mode = data.get("mode") or "classic"
-        evening = game_manager.start_round(code, mode=mode)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode") or "classic"
+    evening = game_manager.start_round(code, mode=mode)
+    return jsonify({"evening": evening}), 200
 
 
 @app.route("/api/evening/<code>/round/end", methods=["POST"])
 def end_round(code):
     """Beendet die laufende Runde"""
-    try:
-        evening = game_manager.end_round(code)
-        return jsonify({"evening": evening}), 200
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    evening = game_manager.end_round(code)
+    return jsonify({"evening": evening}), 200
 
 
 # Statistik-API
@@ -295,22 +233,17 @@ def end_round(code):
 @limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def get_evening_statistics(code):
     """Statistik eines Abends: Zusammenfassung, Spieler-Auswertung, Rundenliste"""
-    try:
-        stats = game_manager.get_statistics(code)
+    stats = game_manager.get_statistics(code)
 
-        stats["summary"]["total_duration_formatted"] = format_duration(stats["summary"]["total_duration"])
-        stats["summary"]["longest_round_formatted"] = format_duration(stats["summary"]["longest_round"])
-        stats["summary"]["avg_duration_formatted"] = format_duration(stats["summary"]["avg_duration"])
-        for player in stats["players"]:
-            player["total_duration_formatted"] = format_duration(player["total_duration"])
-        for r in stats["rounds"]:
-            r["duration_formatted"] = format_duration(r["duration"]) if r["duration"] is not None else "–"
+    stats["summary"]["total_duration_formatted"] = format_duration(stats["summary"]["total_duration"])
+    stats["summary"]["longest_round_formatted"] = format_duration(stats["summary"]["longest_round"])
+    stats["summary"]["avg_duration_formatted"] = format_duration(stats["summary"]["avg_duration"])
+    for player in stats["players"]:
+        player["total_duration_formatted"] = format_duration(player["total_duration"])
+    for r in stats["rounds"]:
+        r["duration_formatted"] = format_duration(r["duration"]) if r["duration"] is not None else "–"
 
-        return _visitor_response(stats, stats["evening"]["code"])
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return _visitor_response(stats, stats["evening"]["code"])
 
 
 def _csv_bytes(header, rows):
@@ -327,46 +260,40 @@ def _csv_bytes(header, rows):
 @limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def export_statistics(code):
     """Abend-Statistik als ZIP mit zwei CSVs (Spieler-Auswertung + Rundenliste)"""
-    try:
-        stats = game_manager.get_statistics(code)
-        code_up = stats["evening"]["code"]
+    stats = game_manager.get_statistics(code)
+    code_up = stats["evening"]["code"]
 
-        players_csv = _csv_bytes(
-            ["Name", "Runden", "Spielzeit (Sek.)", "Spielzeit",
-             "Startbecher", "Teilnahme (%)", "Status"],
-            [[p["name"], p["rounds_played"], round(p["total_duration"]),
-              format_duration(p["total_duration"]), p["start_cups"],
-              p["participation"], "aktiv" if p["active"] else "entfernt"]
-             for p in stats["players"]],
-        )
-        rounds_csv = _csv_bytes(
-            ["Nr", "Gestartet am", "Modus", "Dauer (Sek.)", "Dauer", "Mitspieler"],
-            [[i, r["started_at"],
-              GAME_MODES.get(r["mode"], {}).get("label", r["mode"]),
-              round(r["duration"]) if r["duration"] is not None else "",
-              format_duration(r["duration"]) if r["duration"] is not None else "",
-              r["player_count"]]
-             for i, r in enumerate(stats["rounds"], start=1)],
-        )
+    players_csv = _csv_bytes(
+        ["Name", "Runden", "Spielzeit (Sek.)", "Spielzeit",
+         "Startbecher", "Teilnahme (%)", "Status"],
+        [[p["name"], p["rounds_played"], round(p["total_duration"]),
+          format_duration(p["total_duration"]), p["start_cups"],
+          p["participation"], "aktiv" if p["active"] else "entfernt"]
+         for p in stats["players"]],
+    )
+    rounds_csv = _csv_bytes(
+        ["Nr", "Gestartet am", "Modus", "Dauer (Sek.)", "Dauer", "Mitspieler"],
+        [[i, r["started_at"],
+          GAME_MODES.get(r["mode"], {}).get("label", r["mode"]),
+          round(r["duration"]) if r["duration"] is not None else "",
+          format_duration(r["duration"]) if r["duration"] is not None else "",
+          r["player_count"]]
+         for i, r in enumerate(stats["rounds"], start=1)],
+    )
 
-        mem = io.BytesIO()
-        with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(f"spieler_{code_up}.csv", players_csv)
-            zf.writestr(f"runden_{code_up}.csv", rounds_csv)
-        mem.seek(0)
+    mem = io.BytesIO()
+    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"spieler_{code_up}.csv", players_csv)
+        zf.writestr(f"runden_{code_up}.csv", rounds_csv)
+    mem.seek(0)
 
-        return send_file(
-            mem, mimetype="application/zip", as_attachment=True,
-            download_name=f"cagemachine_{code_up}.zip",
-        )
-    except EveningNotFound as e:
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return send_file(
+        mem, mimetype="application/zip", as_attachment=True,
+        download_name=f"cagemachine_{code_up}.zip",
+    )
 
 
 if __name__ == "__main__":
-    import os
     # Nur für lokale Entwicklung; im Container läuft waitress
     host = os.getenv("FLASK_HOST", "127.0.0.1")
     port = int(os.getenv("FLASK_PORT", "3000"))

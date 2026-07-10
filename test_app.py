@@ -52,24 +52,15 @@ def test_players(code):
     return players
 
 
-def test_draw(code):
-    print("\n[TEST 4] Positionen auslosen...")
-    r = requests.post(f"{BASE_URL}/api/evening/{code}/draw")
-    assert r.status_code == 200
-    players = r.json()["evening"]["players"]
-    assert sorted(p["position"] for p in players) == [1, 2, 3]
-    print(f"  ✓ Auslosung: {[(p['position'], p['name']) for p in players]}")
-
-
-def test_remove_player_compaction(code):
-    print("\n[TEST 5] Spieler entfernen schließt Positionslücke...")
+def test_remove_player(code):
+    print("\n[TEST 5] Nie gespielten Spieler hart entfernen...")
     players = requests.get(f"{BASE_URL}/api/evening/{code}").json()["evening"]["players"]
-    victim = next(p for p in players if p["position"] == 2)
+    victim = next(p for p in players if p["name"] == "Ben")
     r = requests.delete(f"{BASE_URL}/api/evening/{code}/players/{victim['id']}")
     assert r.status_code == 200
-    remaining = r.json()["evening"]["players"]
-    assert [p["position"] for p in remaining] == [1, 2], "Positionen sollten verdichtet sein"
-    print("  ✓ Positionen lückenlos verdichtet")
+    remaining = [p["name"] for p in r.json()["evening"]["players"]]
+    assert remaining == ["Anna", "Chris"], "Ben sollte hart entfernt sein"
+    print("  ✓ Hart entfernt (nie gespielt)")
 
 
 def test_rounds(code):
@@ -78,9 +69,6 @@ def test_rounds(code):
     assert r.status_code == 200
     assert r.json()["evening"]["open_round"] is not None, "Runde sollte offen sein"
 
-    r = requests.post(f"{BASE_URL}/api/evening/{code}/draw")
-    assert r.status_code == 400, "Auslosen während laufender Runde sollte 400 liefern"
-
     time.sleep(1)
     r = requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
     assert r.status_code == 200
@@ -88,7 +76,7 @@ def test_rounds(code):
 
     r = requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "gibtsnicht"})
     assert r.status_code == 400, "Unbekannter Modus sollte 400 liefern"
-    print("  ✓ Runde offen/geschlossen, Draw-Sperre, Modus-Validierung")
+    print("  ✓ Runde offen/geschlossen, Modus-Validierung")
 
 
 def test_modes():
@@ -183,12 +171,10 @@ def test_draw_on_start():
     assert sorted(p["position"] for p in r.json()["evening"]["players"]) == [1, 2, 3, 4]
     requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
 
-    # Snapshot der Runde trägt die neu gelosten Positionen
+    # Snapshot der Runde trägt die gelosten Teilnehmer
     stats = requests.get(f"{BASE_URL}/api/evening/{code}/statistics").json()
     assert stats["rounds"][-1]["player_count"] == 4
-    positions = [p["last_position"] for p in stats["players"]]
-    assert sorted(positions) == [1, 2, 3, 4]
-    print("  ✓ Auslosung bei jedem Rundenstart, Snapshot-Positionen")
+    print("  ✓ Auslosung bei jedem Rundenstart, Snapshot-Teilnehmer")
 
 
 def test_readd_player():
@@ -477,8 +463,7 @@ if __name__ == "__main__":
     code = test_create_evening()
     test_resume_evening(code)
     test_players(code)
-    test_draw(code)
-    test_remove_player_compaction(code)
+    test_remove_player(code)
     test_rounds(code)
     test_statistics(code)
     test_modes()

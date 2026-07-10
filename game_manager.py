@@ -61,8 +61,33 @@ class EveningNotFound(Exception):
     """Abend zu einem Code existiert nicht"""
 
 
+class PlayerNotFound(Exception):
+    """Spieler-ID existiert im Abend nicht"""
+
+
 def _now():
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _evening_id(conn, code):
+    return conn.execute("SELECT id FROM evening WHERE code = ?", (code,)).fetchone()["id"]
+
+
+def _next_position(players):
+    """Nächste freie Position (hinten anhängen); None, wenn noch nie gelost"""
+    positions = [p["position"] for p in players if p["position"]]
+    return max(positions) + 1 if positions else None
+
+
+def _compact_positions(conn, players, exclude_id):
+    """Verbleibende Positionen (ohne exclude_id) lückenlos auf 1..n verdichten"""
+    remaining = [
+        p for p in players if p["id"] != exclude_id and p["position"] is not None
+    ]
+    for position, player in enumerate(remaining, start=1):
+        conn.execute(
+            "UPDATE player SET position = ? WHERE id = ?", (position, player["id"])
+        )
 
 
 def _duration_seconds(start_iso, end_iso):
@@ -245,13 +270,10 @@ class GameManager:
             raise ValueError(f"Spielername '{name}' bereits vorhanden")
 
         # Wurde schon gelost, wird der Neue hinten angehängt
-        positions = [p["position"] for p in evening["players"] if p["position"]]
-        position = max(positions) + 1 if positions else None
+        position = _next_position(evening["players"])
 
         with db.connect() as conn:
-            evening_id = conn.execute(
-                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
-            ).fetchone()["id"]
+            evening_id = _evening_id(conn, evening["code"])
 
             # Bereits mitgespielte Spieler reaktivieren statt duplizieren
             removed = conn.execute(
@@ -269,34 +291,6 @@ class GameManager:
                     "INSERT INTO player (id, evening_id, name, position, active, added_at)"
                     " VALUES (?, ?, ?, ?, 1, ?)",
                     (str(uuid.uuid4()), evening_id, name, position, _now()),
-                )
-        return self.get_evening(code)
-
-    def draw_positions(self, code):
-        """Lost die Sitzpositionen der aktiven Spieler aus (1 = Startbecher)"""
-        evening = self.get_evening(code)
-        players = [p for p in evening["players"] if p["active"]]
-        if len(players) < 2:
-            raise ValueError("Zum Auslosen werden mindestens zwei Spieler benötigt")
-
-        with db.connect() as conn:
-            evening_id = conn.execute(
-                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
-            ).fetchone()["id"]
-
-            open_round = conn.execute(
-                "SELECT 1 FROM round WHERE evening_id = ? AND ended_at IS NULL",
-                (evening_id,),
-            ).fetchone()
-            if open_round:
-                raise ValueError("Auslosen ist nicht möglich, solange eine Runde läuft")
-
-            player_ids = [p["id"] for p in players]
-            random.shuffle(player_ids)
-            for position, player_id in enumerate(player_ids, start=1):
-                conn.execute(
-                    "UPDATE player SET position = ? WHERE id = ?",
-                    (position, player_id),
                 )
         return self.get_evening(code)
 
@@ -384,19 +378,14 @@ class GameManager:
         """Beendet die laufende Runde (kein Fehler, wenn keine offen ist)"""
         evening = self.get_evening(code)
         with db.connect() as conn:
-            evening_id = conn.execute(
-                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
-            ).fetchone()["id"]
-            self._close_open_rounds(conn, evening_id, _now())
+            self._close_open_rounds(conn, _evening_id(conn, evening["code"]), _now())
         return self.get_evening(code)
 
     def get_statistics(self, code):
         """Statistik eines Abends: Runden, Spieler-Auswertung, Zusammenfassung"""
         evening = self.get_evening(code)
         with db.connect() as conn:
-            evening_id = conn.execute(
-                "SELECT id FROM evening WHERE code = ?", (evening["code"],)
-            ).fetchone()["id"]
+            evening_id = _evening_id(conn, evening["code"])
 
             rounds = conn.execute(
                 "SELECT * FROM round WHERE evening_id = ? ORDER BY started_at",
@@ -449,7 +438,6 @@ class GameManager:
                 "rounds_played": 0,
                 "total_duration": 0.0,
                 "start_cups": 0,
-                "last_position": p["position"],
             }
             for p in all_players
         }
@@ -459,7 +447,6 @@ class GameManager:
             if row["duration"] is not None:
                 stats["total_duration"] += row["duration"]
             if row["position"] is not None:
-                stats["last_position"] = row["position"]
                 # Startbecher: Position 1 immer, Becher 2 laut Runde
                 if row["position"] == 1 or row["position"] == cup2_by_round.get(row["round_id"]):
                     stats["start_cups"] += 1
@@ -503,7 +490,7 @@ class GameManager:
         """Deaktiviert einen Spieler (bleibt für Statistik erhalten)"""
         evening = self.get_evening(code)
         if not any(p["id"] == player_id for p in evening["players"]):
-            raise ValueError("Spieler nicht gefunden")
+            raise PlayerNotFound("Spieler nicht gefunden")
         if evening["open_round"]:
             raise ValueError("Deaktivieren ist nicht möglich, solange eine Runde läuft")
 
@@ -512,18 +499,8 @@ class GameManager:
                 "UPDATE player SET active = 0, position = NULL WHERE id = ?",
                 (player_id,),
             )
-
-            # Lücke schließen: verbleibende Positionen in bestehender
-            # Reihenfolge auf 1..n verdichten
-            remaining = [
-                p for p in evening["players"]
-                if p["id"] != player_id and p["position"] is not None
-            ]
-            for position, player in enumerate(remaining, start=1):
-                conn.execute(
-                    "UPDATE player SET position = ? WHERE id = ?",
-                    (position, player["id"]),
-                )
+            # Lücke schließen: verbleibende Positionen auf 1..n verdichten
+            _compact_positions(conn, evening["players"], player_id)
         return self.get_evening(code)
 
     def reactivate_player(self, code, player_id):
@@ -531,14 +508,13 @@ class GameManager:
         evening = self.get_evening(code)
         player = next((p for p in evening["players"] if p["id"] == player_id), None)
         if player is None:
-            raise ValueError("Spieler nicht gefunden")
+            raise PlayerNotFound("Spieler nicht gefunden")
         if player["active"]:
             return evening
         if evening["open_round"]:
             raise ValueError("Reaktivieren ist nicht möglich, solange eine Runde läuft")
 
-        positions = [p["position"] for p in evening["players"] if p["position"]]
-        position = max(positions) + 1 if positions else None
+        position = _next_position(evening["players"])
         with db.connect() as conn:
             conn.execute(
                 "UPDATE player SET active = 1, position = ? WHERE id = ?",
@@ -551,7 +527,7 @@ class GameManager:
         evening = self.get_evening(code)
         player = next((p for p in evening["players"] if p["id"] == player_id), None)
         if player is None:
-            raise ValueError("Spieler nicht gefunden")
+            raise PlayerNotFound("Spieler nicht gefunden")
         if player["played"]:
             raise ValueError(
                 f"'{player['name']}' hat schon gespielt und kann nur deaktiviert werden"
@@ -559,15 +535,6 @@ class GameManager:
 
         with db.connect() as conn:
             conn.execute("DELETE FROM player WHERE id = ?", (player_id,))
-
             # Lücke schließen: verbleibende Positionen auf 1..n verdichten
-            remaining = [
-                p for p in evening["players"]
-                if p["id"] != player_id and p["position"] is not None
-            ]
-            for position, remaining_player in enumerate(remaining, start=1):
-                conn.execute(
-                    "UPDATE player SET position = ? WHERE id = ?",
-                    (position, remaining_player["id"]),
-                )
+            _compact_positions(conn, evening["players"], player_id)
         return self.get_evening(code)
