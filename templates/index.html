@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
   <link rel="manifest" href="/static/site.webmanifest" />
@@ -23,13 +23,16 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
       min-height: 100vh;
+      min-height: 100dvh; /* iOS: Adressleiste nicht mitrechnen */
       padding: 20px;
+      padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
       color: #333;
     }
 
@@ -57,7 +60,10 @@
       .container {
         grid-template-columns: minmax(0, 1fr);   /* Track darf nicht ueber Viewport wachsen */
       }
-      body { padding: 12px; }
+      body {
+        padding: 12px;
+        padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      }
       .card { padding: 20px; }
       h1 { font-size: 26px; }
       h2 { font-size: 20px; }
@@ -274,9 +280,11 @@
       justify-content: center;
       background: rgba(0, 0, 0, 0.75);
       color: white;
-      font-size: 64px;
+      font-size: clamp(32px, 12vw, 64px); /* schmale Screens: kein Overflow */
       font-weight: 800;
       letter-spacing: 2px;
+      padding: 0 16px;
+      text-align: center;
       z-index: 1000;
       pointer-events: none;
     }
@@ -428,7 +436,6 @@
       .music-controls {
         grid-template-columns: 1fr;
       }
-      .btn-music { padding: 20px 24px; font-size: 20px; }
     }
 
     .btn-music {
@@ -626,6 +633,16 @@
       text-align: right;
     }
 
+    /* Mobile-Overrides: NACH den Basisregeln (gleiche Spezifitaet, spaeter gewinnt) */
+    @media (max-width: 768px) {
+      .btn-music { padding: 20px 24px; font-size: 20px; }
+      /* Touch-Ziele >= 44px */
+      .btn-remove, .btn-toggle {
+        padding: 12px 14px;
+        font-size: 14px;
+        min-height: 44px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -992,6 +1009,77 @@
         return { status: this.state, message: map[this.state] || "unbekannt" };
       }
     }
+
+    // --- Wake Lock & Media Session (progressive enhancement) ---
+
+    // Stiller Audio-Anker: erst ein Media-Element erzeugt eine Media Session
+    function makeSilentWavUrl() {
+      const rate = 8000, samples = rate; // 1 s Stille, 16-bit mono PCM
+      const buf = new ArrayBuffer(44 + samples * 2);
+      const v = new DataView(buf);
+      const str = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+      str(0, "RIFF"); v.setUint32(4, 36 + samples * 2, true); str(8, "WAVE");
+      str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      str(36, "data"); v.setUint32(40, samples * 2, true);
+      return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+    }
+    const mediaAnchor = new Audio(makeSilentWavUrl());
+    mediaAnchor.loop = true;
+    mediaAnchor.volume = 0.05; // nicht muted: sonst keine Media Session (Chrome-Heuristik)
+
+    // Display anlassen, solange Musik laeuft
+    const wakeLock = {
+      sentinel: null,
+      acquire() {
+        if (!navigator.wakeLock || this.sentinel) return;
+        // fire-and-forget: Ablehnung (z. B. Energiesparmodus) darf Playback nie brechen
+        try {
+          navigator.wakeLock.request("screen").then((s) => {
+            this.sentinel = s;
+            s.addEventListener("release", () => { this.sentinel = null; });
+          }).catch((e) => { console.warn("Wake Lock abgelehnt:", e); });
+        } catch (e) { console.warn("Wake Lock nicht verfuegbar:", e); }
+      },
+      release() {
+        if (this.sentinel) { this.sentinel.release().catch(() => {}); this.sentinel = null; }
+      }
+    };
+    document.addEventListener("visibilitychange", () => {
+      // OS gibt den Lock beim Verstecken frei -> bei Rueckkehr neu anfordern
+      if (document.visibilityState === "visible" && clientAudio &&
+          (clientAudio.state === "intro" || clientAudio.state === "looping")) {
+        wakeLock.acquire();
+      }
+    });
+
+    // Wake Lock, Anker und playbackState dem Audio-Status nachfuehren (idempotent, laeuft im Poll)
+    function syncPlaybackIntegrations(state) {
+      const playing = state === "intro" || state === "looping";
+      if (playing) {
+        wakeLock.acquire();
+        if (mediaAnchor.paused) mediaAnchor.play().catch(() => {});
+      } else {
+        wakeLock.release();
+        if (!mediaAnchor.paused) mediaAnchor.pause();
+      }
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = playing ? "playing" : (state === "paused" ? "paused" : "none");
+      }
+    }
+
+    function setMediaSessionMetadata(modeLabel) {
+      if (!("mediaSession" in navigator)) return;
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: "Rage Cage",
+        artist: modeLabel || "Rage Cage",
+        artwork: [
+          { src: "/static/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/static/icon-512.png", sizes: "512x512", type: "image/png" }
+        ]
+      });
+    }
+
 // Initialize client audio controller
     let clientAudio = null;
     
@@ -1492,6 +1580,7 @@
         statusEl.classList.remove("active");
       }
       updateButtonStates();
+      syncPlaybackIntegrations(currentStatus);
     }
 
     function updateButtonStates() {
@@ -1701,6 +1790,7 @@
       }
       roundTimer.limit = (mode && mode.time_limit) || null;
       roundTimer.elapsed = 0;
+      setMediaSessionMetadata(mode && mode.label);
       return true;
     }
 
@@ -1831,6 +1921,7 @@
       timeDisplay.textContent = formatTime(currentPosition);
       try {
         await clientAudio.startAtPosition(seconds);
+        setMediaSessionMetadata("Headstart");
       } catch (e) {
         console.error("Audio-Start fehlgeschlagen:", e);
         alert("Audio konnte nicht geladen werden.");
@@ -1884,6 +1975,18 @@
         }
       }
     });
+
+    // Sperrbildschirm-Steuerung: play = nur Resume (nie neue Runde starten/tracken)
+    if ("mediaSession" in navigator) {
+      const mediaActions = {
+        play: () => { if (currentStatus === "paused") btnPause.click(); },
+        pause: () => { if (currentStatus === "intro" || currentStatus === "looping") btnPause.click(); },
+        stop: () => { if (currentStatus !== "stopped" || multiRound.pendingStart) btnStop.click(); }
+      };
+      for (const [action, handler] of Object.entries(mediaActions)) {
+        try { navigator.mediaSession.setActionHandler(action, handler); } catch (e) { /* Action nicht unterstuetzt */ }
+      }
+    }
 
     // Polling starten
     statusPollInterval = setInterval(updateStatus, 500);
