@@ -6,17 +6,27 @@
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
   <link rel="manifest" href="/static/site.webmanifest" />
-  <meta name="theme-color" content="#667eea" />
+  <meta name="theme-color" content="#0d9488" />
   <title>Rage Cage</title>
   <style>
     :root {
-      --brand: #667eea;
-      --brand-2: #764ba2;
-      --cup: #d8352f;
+      --brand: #0d9488;
+      --brand-2: #0f766e;
+      --primary: #0d9488;
+      --on-primary: #ffffff;
+      --cup: #d8352f;                 /* Becher-Illustration, unveraendert */
       --cup-dark: #b91c1c;
-      --add: #10b981;
-      --add-dark: #059669;
-      --pos: #667eea;
+      --danger: #e11d48;              /* Stop / Loeschen / Startbecher */
+      --danger-dark: #be123c;
+      --add: #059669;                 /* Start / Reaktivieren */
+      --add-dark: #047857;
+      --pos: #0d9488;                 /* normale Positions-Badge */
+      --text: #134e4a;
+      --muted: #5b807b;
+      --border: #cbeee8;
+      --surface: #ffffff;
+      --surface-2: #f0fdfa;
+      --highlight: #ecfdf5;
     }
 
     * {
@@ -70,9 +80,10 @@
     }
 
     .card {
-      background: white;
+      background: var(--surface);
       border-radius: 16px;
       padding: 32px;
+      border: 1px solid var(--border);
       box-shadow: 0 10px 40px rgba(0,0,0,0.1);
     }
 
@@ -93,7 +104,7 @@
     .section-title {
       font-size: 18px;
       font-weight: 600;
-      color: #667eea;
+      color: var(--primary);
       margin-bottom: 16px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -104,7 +115,7 @@
       display: inline-block;
       margin-bottom: 20px;
       padding: 10px 20px;
-      background: #667eea;
+      background: var(--primary);
       color: white;
       text-decoration: none;
       border-radius: 8px;
@@ -113,7 +124,7 @@
     }
 
     .nav-link:hover {
-      background: #5568d3;
+      background: var(--brand-2);
     }
 
     /* Rage Cage */
@@ -134,13 +145,13 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, var(--primary) 0%, var(--brand-2) 100%);
       color: white;
     }
 
     .btn-primary:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 8px 20px rgba(13, 148, 136, 0.4);
     }
 
     .btn-secondary {
@@ -176,7 +187,7 @@
 
     .input:focus {
       outline: none;
-      border-color: #667eea;
+      border-color: var(--primary);
     }
 
     .btn-small {
@@ -228,7 +239,8 @@
     }
 
     .player-pos.startbecher {
-      background: var(--cup);
+      background: var(--danger);
+      box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.25);
     }
 
     /* Spielmodus-Auswahl */
@@ -240,11 +252,11 @@
     }
 
     .mode-btn {
-      padding: 10px 16px;
-      border: 2px solid #667eea;
-      border-radius: 8px;
-      background: white;
-      color: #667eea;
+      padding: 9px 16px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--muted);
       font-weight: 600;
       font-size: 14px;
       cursor: pointer;
@@ -252,8 +264,9 @@
     }
 
     .mode-btn.selected {
-      background: #667eea;
-      color: white;
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary);
     }
 
     .mode-btn:disabled {
@@ -290,7 +303,7 @@
     }
 
     .btn-remove {
-      background: var(--cup);
+      background: var(--danger);
       color: white;
       padding: 6px 12px;
       font-size: 12px;
@@ -300,7 +313,7 @@
     }
 
     .btn-remove:hover {
-      background: var(--cup-dark);
+      background: var(--danger-dark);
     }
 
     /* Deaktivierte Spieler: ausgegraut, nicht am Tisch */
@@ -346,8 +359,10 @@
       width: 68%;
       height: 60%;
       border-radius: 50%;
-      background: radial-gradient(ellipse at center, #9c6b3f 0%, #6b4423 100%);
-      box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.18);
+      /* Mittleres, gedaempftes Teal, eine Nuance dunkler */
+      background: radial-gradient(ellipse at center, #5da89b 0%, #3f8c7f 60%, #2f7468 100%);
+      border: 3px solid #275f55;
+      box-shadow: inset 0 0 34px rgba(10, 50, 45, 0.3), 0 6px 16px rgba(0, 0, 0, 0.1);
     }
 
     /* Becher-Pyramide in der Tisch-Mitte */
@@ -389,8 +404,8 @@
     }
 
     .seat-chip.startbecher .seat-avatar {
-      border-color: var(--cup);
-      box-shadow: 0 0 14px rgba(216, 53, 47, 0.85);
+      border-color: var(--danger);
+      box-shadow: 0 0 14px rgba(225, 29, 72, 0.85);
     }
 
     .seat-cup {
@@ -466,17 +481,18 @@
     }
 
     .btn-pause {
-      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-      color: white;
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
     }
 
     .btn-stop {
-      background: linear-gradient(135deg, var(--cup) 0%, var(--cup-dark) 100%);
+      background: linear-gradient(135deg, var(--danger) 0%, var(--danger-dark) 100%);
       color: white;
     }
 
     .btn-danger {
-      background: linear-gradient(135deg, var(--cup) 0%, var(--cup-dark) 100%);
+      background: linear-gradient(135deg, var(--danger) 0%, var(--danger-dark) 100%);
       color: white;
       font-size: 18px;
       padding: 20px 24px;
@@ -484,9 +500,9 @@
     }
 
     .btn-danger:hover:not(:disabled) {
-      background: linear-gradient(135deg, var(--cup-dark) 0%, #7f1414 100%);
+      background: linear-gradient(135deg, var(--danger-dark) 0%, #9f1239 100%);
       transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
+      box-shadow: 0 6px 16px rgba(225, 29, 72, 0.3);
     }
 
     .status {
@@ -518,7 +534,7 @@
       font-family: 'Courier New', monospace;
       font-size: 18px;
       font-weight: 600;
-      color: #667eea;
+      color: var(--primary);
       min-width: 140px;
       text-align: center;
     }
@@ -557,7 +573,7 @@
       margin-bottom: 16px;
     }
 
-    /* Kopfleiste der Abend-Karte: Statistik links, Teilen rechts */
+    /* Kopfleiste der Abend-Karte: Statistik links, Code-Pill rechts */
     .card-topbar {
       display: flex;
       justify-content: space-between;
@@ -566,11 +582,44 @@
       flex-wrap: wrap;
     }
 
-    /* Teilen-Bereich (per Button oben rechts eingeblendet): Link kopieren + QR */
+    /* Abend-Code als Pille oben rechts; Klick oeffnet die Teilen-Karte */
+    .code-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 20px;
+      padding: 7px 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .code-pill .ic { stroke-width: 2; }
+
+    .code-pill:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .code-pill.open {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--on-primary);
+    }
+
+    /* Teilen-Karte (per Code-Pille eingeblendet): Link kopieren + QR */
     .share-box {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid #e8e8e8;
+      margin: 12px 0 4px;
+      padding: 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
     }
 
     .share-content {
@@ -605,14 +654,14 @@
     }
 
     .evening-item:hover {
-      background: #eef0ff;
+      background: var(--surface-2);
     }
 
     .evening-item-code {
       font-size: 20px;
       font-weight: 700;
       letter-spacing: 2px;
-      color: #667eea;
+      color: var(--primary);
     }
 
     .evening-item-main {
@@ -699,11 +748,19 @@
     <div class="card">
       <div class="card-topbar">
         <a href="/statistics" class="nav-link" id="statisticsLink"><svg class="ic" aria-hidden="true"><use href="#ic-chart" xlink:href="#ic-chart"/></svg> Statistik anzeigen</a>
-        <button class="nav-link" id="btnShareToggle" style="display: none; border: none; cursor: pointer;"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Abend teilen</button>
+        <button class="code-pill" id="codePill" style="display: none;" title="Abend teilen"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg><span id="codePillText">-</span></button>
       </div>
 
       <h1><svg class="cup-ico cup-title" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Rage Cage</h1>
-      
+
+      <!-- Teilen-Karte: per Code-Pille oben rechts ein-/ausgeklappt -->
+      <div class="share-box" id="shareBox" style="display: none;">
+        <div class="share-content">
+          <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Link kopieren</button>
+          <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
+        </div>
+      </div>
+
       <div class="session-controls" id="eveningStartControls">
         <button class="btn btn-primary" id="btnCreateEvening">Neuen Abend starten</button>
       </div>
@@ -726,10 +783,6 @@
       </div>
 
       <div id="eveningInfo" class="session-info" style="display: none;">
-        <div class="session-info-item">
-          <span class="session-info-label">Abend-Code:</span>
-          <span class="session-info-value" id="eveningCode" style="font-size: 24px; font-weight: 700; letter-spacing: 3px;">-</span>
-        </div>
         <input
           type="text"
           class="input"
@@ -745,13 +798,6 @@
         <div class="session-info-item">
           <span class="session-info-label" title="Normale Runden können überraschend zum Bullrush werden"><svg class="ic" aria-hidden="true"><use href="#ic-bolt" xlink:href="#ic-bolt"/></svg> Zufalls-Bullrush:</span>
           <input type="checkbox" id="randomBullrushToggle" style="width: 20px; height: 20px; cursor: pointer;" />
-        </div>
-
-        <div class="share-box" id="shareBox" style="display: none;">
-          <div class="share-content">
-            <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Link kopieren</button>
-            <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
-          </div>
         </div>
       </div>
 
@@ -814,7 +860,7 @@
       </div>
 
       <div style="text-align: right; margin-top: 16px;">
-        <a href="#" id="linkShowHeadstart" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 500; display: none;">Ich weiß was ich mache!</a>
+        <a href="#" id="linkShowHeadstart" style="color: var(--primary); text-decoration: none; font-size: 14px; font-weight: 500; display: none;">Ich weiß was ich mache!</a>
       </div>
     </div>
   </div>
@@ -1098,7 +1144,7 @@
     const eveningNameInput = document.getElementById("eveningNameInput");
     const eveningHistory = document.getElementById("eveningHistory");
     const eveningHistoryList = document.getElementById("eveningHistoryList");
-    const btnShareToggle = document.getElementById("btnShareToggle");
+    const codePill = document.getElementById("codePill");
     const shareBox = document.getElementById("shareBox");
     
     const btnStart = document.getElementById("btnStart");
@@ -1190,7 +1236,7 @@
           document.getElementById("shareQr").src =
             `/api/evening/${encodeURIComponent(currentCode)}/qr`;
           shareBox.style.display = "none";
-          btnShareToggle.innerHTML = ic("ic-link") + " Abend teilen";
+          codePill.classList.remove("open");
         }
       }
       updateEveningUI();
@@ -1364,7 +1410,8 @@
         eveningInfo.style.display = "none";
         playerSection.style.display = "none";
         musicCard.style.display = "none";       // ohne Abend nichts zu steuern
-        btnShareToggle.style.display = "none";
+        codePill.style.display = "none";
+        codePill.classList.remove("open");
         shareBox.style.display = "none";        // beim Verlassen zuklappen
         eveningStartControls.style.display = "block";
         resumeGroup.style.display = "flex";
@@ -1379,9 +1426,9 @@
       eveningInfo.style.display = "block";
       playerSection.style.display = "block";
       musicCard.style.display = "block";
-      btnShareToggle.style.display = "inline-block";
+      codePill.style.display = "inline-flex";
 
-      document.getElementById("eveningCode").textContent = currentEvening.code;
+      document.getElementById("codePillText").textContent = currentEvening.code;
       const players = currentEvening.players || [];
       const activePlayers = players.filter(p => p.active);
       document.getElementById("playerCount").textContent = activePlayers.length;
@@ -1479,10 +1526,12 @@
     let tableAngleOffset = 0;      // Drehwinkel des Nummern-Rads
     let tableAngleRoundId = null;  // Runde, für die der Winkel gilt
 
+    // Kuratierte Jewel-Tones, die zur Teal-&-Rosé-Palette passen und auf dem Filz kontrastieren
+    const PLAYER_COLORS = ["#e11d48", "#ea580c", "#d97706", "#7c3aed", "#2563eb", "#db2777", "#0891b2", "#9333ea"];
     function playerColor(id) {
       let h = 0;
-      for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
-      return `hsl(${h}, 65%, 50%)`;
+      for (const c of id) h = (Math.imul(h, 31) + c.charCodeAt(0)) | 0;
+      return PLAYER_COLORS[Math.abs(h) % PLAYER_COLORS.length];
     }
 
     function renderTableView(players, openRound) {
@@ -1650,10 +1699,10 @@
     });
 
     // Teilen: Button oben rechts blendet die Section an ihrer Stelle ein/aus
-    btnShareToggle.addEventListener("click", () => {
+    codePill.addEventListener("click", () => {
       const open = shareBox.style.display !== "none";
       shareBox.style.display = open ? "none" : "block";
-      btnShareToggle.innerHTML = open ? ic("ic-link") + " Abend teilen" : "✕ Teilen schließen";
+      codePill.classList.toggle("open", !open);
     });
     document.getElementById("btnCopyLink").addEventListener("click", (e) => {
       if (currentCode) copyWithFeedback(e.currentTarget, eveningLink());
