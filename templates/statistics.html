@@ -181,14 +181,15 @@
       gap: 14px;
       padding: 16px 20px;
       border-radius: 12px;
-      background: #fdf6e0;
-      border: 1px solid #f3e3b3;
+      background: var(--highlight);
+      border: 1px solid var(--border);
     }
 
     .highlight-icon {
       font-size: 32px;
       display: flex;
       align-items: center;
+      color: var(--primary);
     }
 
     .highlight-icon .cup-ico { width: 30px; height: 37px; }
@@ -197,14 +198,14 @@
       font-size: 13px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #b08a2e;
+      color: var(--primary);
       font-weight: 600;
     }
 
     .highlight-value {
       font-size: 17px;
       font-weight: 700;
-      color: #333;
+      color: var(--text);
     }
 
     /* Breite Tabellen scrollen im Container statt die Seite aufzublaehen */
@@ -253,13 +254,13 @@
       color: var(--primary);
     }
 
-    /* Längste Runde: dezent golden hinterlegt */
+    /* Längste Runde: dezent teal hinterlegt */
     .games-table tr.longest td {
-      background: #fdf6e0;
+      background: var(--highlight);
     }
 
     .games-table tr.longest:hover {
-      background: #fdf6e0;
+      background: var(--highlight);
     }
 
     /* Mobile Tabellen-Overrides: NACH den Basisregeln (gleiche Spezifitaet, spaeter gewinnt) */
@@ -328,7 +329,7 @@
   <div class="container">
     <div class="card">
       <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-        <a href="/" class="nav-link" id="backToEveningLink" style="display: none; background: var(--add);"><svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Zum laufenden Abend</a>
+        <a href="/" class="nav-link" id="backToEveningLink" style="display: none;"><svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Zum laufenden Abend</a>
         <a href="#" class="nav-link" id="exportLink" style="display: none; background: var(--brand);"><svg class="ic" aria-hidden="true"><use href="#ic-download" xlink:href="#ic-download"/></svg> CSV-Export</a>
       </div>
       
