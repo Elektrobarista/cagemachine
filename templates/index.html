@@ -299,6 +299,43 @@
       pointer-events: none;
     }
 
+    /* Statistik-Overlay: Vollflaechiger Iframe + schwebender runder Schliessen-Button */
+    .stats-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: var(--surface);
+      display: none;
+    }
+
+    .stats-overlay.open { display: block; }
+
+    .stats-frame { width: 100%; height: 100%; border: 0; display: block; }
+
+    .btn-close-stats {
+      position: absolute;
+      top: max(14px, env(safe-area-inset-top));
+      right: max(14px, env(safe-area-inset-right));
+      z-index: 10;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+      transition: transform 0.12s, background 0.12s;
+    }
+
+    .btn-close-stats:hover { background: #ffffff; transform: scale(1.06); }
+
     .btn-remove {
       background: var(--danger);
       color: white;
@@ -863,6 +900,12 @@
         <a href="#" id="linkShowHeadstart" style="color: var(--primary); text-decoration: none; font-size: 14px; font-weight: 500; display: none;">Ich weiß was ich mache!</a>
       </div>
     </div>
+  </div>
+
+  <!-- Statistik als In-Page-Overlay: eingebettete Statistik-Seite, Musik laeuft weiter -->
+  <div class="stats-overlay" id="statsOverlay" aria-hidden="true">
+    <iframe class="stats-frame" id="statsFrame" title="Statistik"></iframe>
+    <button class="btn-close-stats" id="btnCloseStats" aria-label="Statistik schließen">✕</button>
   </div>
 
   <script>
@@ -1706,6 +1749,29 @@
     });
     document.getElementById("btnCopyLink").addEventListener("click", (e) => {
       if (currentCode) copyWithFeedback(e.currentTarget, eveningLink());
+    });
+
+    // Statistik als In-Page-Overlay öffnen (kein Seitenwechsel → Musik läuft weiter)
+    const statsOverlay = document.getElementById("statsOverlay");
+    const statsFrame = document.getElementById("statsFrame");
+    function openStatsOverlay() {
+      const base = currentCode ? `/statistics/${encodeURIComponent(currentCode)}` : "/statistics";
+      statsFrame.src = `${base}?embed=1`;
+      statsOverlay.classList.add("open");
+      statsOverlay.setAttribute("aria-hidden", "false");
+    }
+    function closeStatsOverlay() {
+      statsOverlay.classList.remove("open");
+      statsOverlay.setAttribute("aria-hidden", "true");
+      statsFrame.src = "about:blank";   // Poll der eingebetteten Seite stoppen
+    }
+    document.getElementById("statisticsLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      openStatsOverlay();
+    });
+    document.getElementById("btnCloseStats").addEventListener("click", closeStatsOverlay);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && statsOverlay.classList.contains("open")) closeStatsOverlay();
     });
     // Abend-Einstellungs-Toggles: Checkbox <-> Settings-Endpoint
     function bindSettingToggle(toggle, settingKey) {

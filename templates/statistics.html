@@ -372,6 +372,8 @@
     const pathMatch = window.location.pathname.match(/^\/statistics\/([A-Za-z0-9]+)$/);
     const eveningCode = pathMatch ? pathMatch[1].toUpperCase()
       : localStorage.getItem("cagemachine:lastEveningCode");
+    // Eingebettet als Overlay (index.html) → eigener Zurück-Link entfällt
+    const embedded = new URLSearchParams(window.location.search).has("embed");
 
     function esc(text) {
       const div = document.createElement("div");
@@ -678,7 +680,7 @@
       const exportLink = document.getElementById("exportLink");
       if (eveningCode) {
         link.href = `/abend/${eveningCode}`;
-        link.style.display = "inline-block";
+        link.style.display = embedded ? "none" : "inline-block";
         // Download der beiden CSVs (Spieler + Runden) als ZIP
         exportLink.href = `/api/evening/${encodeURIComponent(eveningCode)}/export`;
         exportLink.style.display = "inline-block";
