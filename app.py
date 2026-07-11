@@ -42,6 +42,9 @@ VISITOR_COOKIE = "cagemachine_visitor"
 # Regeln/Bedienung als Markdown-Datei (pro Aufruf gelesen → ohne Neustart pflegbar)
 HELP_FILE = os.getenv("HELP_FILE", os.path.join("content", "hilfe.md"))
 
+# Debug-Headstart-Link ("Ich weiß was ich mache!"); Default: ausgeblendet
+HEADSTART_ENABLED = os.getenv("HEADSTART_ENABLED", "0").lower() in ("1", "true", "yes")
+
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
@@ -84,13 +87,13 @@ def _visitor_response(payload, evening_code):
 @app.route("/")
 def index():
     """Hauptseite rendern"""
-    return render_template("index.html")
+    return render_template("index.html", headstart_enabled=HEADSTART_ENABLED)
 
 
 @app.route("/abend/<code>")
 def evening_page(code):
     """Hauptseite mit vorausgewähltem Abend (Wiederaufnahme per Link)"""
-    return render_template("index.html")
+    return render_template("index.html", headstart_enabled=HEADSTART_ENABLED)
 
 
 @app.route("/statistics")

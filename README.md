@@ -55,6 +55,9 @@ Abende, die länger als 14 Tage nicht genutzt wurden, werden automatisch samt
 aller Daten gelöscht (Frist über `RETENTION_DAYS` konfigurierbar; geprüft beim
 Serverstart und bei jedem Anlegen eines Abends).
 
+Der Debug-Link „Ich weiß was ich mache!" (Headstart-Sprünge im Audio) ist
+standardmäßig ausgeblendet; `HEADSTART_ENABLED=1` blendet ihn ein.
+
 ### Betrieb hinter nginx (Reverse-Proxy)
 
 Läuft cagemachine hinter einem Reverse-Proxy (eigene Domain, HTTPS), wertet die
