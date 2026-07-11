@@ -51,6 +51,10 @@ docker compose up
 Abende, Spieler und Runden liegen in einer SQLite-Datei (`data/cagemachine.db`,
 über `DB_PATH` konfigurierbar; im Docker-Setup als Volume gemountet).
 
+Abende, die länger als 14 Tage nicht genutzt wurden, werden automatisch samt
+aller Daten gelöscht (Frist über `RETENTION_DAYS` konfigurierbar; geprüft beim
+Serverstart und bei jedem Anlegen eines Abends).
+
 ### Betrieb hinter nginx (Reverse-Proxy)
 
 Läuft cagemachine hinter einem Reverse-Proxy (eigene Domain, HTTPS), wertet die

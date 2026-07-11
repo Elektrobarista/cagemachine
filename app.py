@@ -14,7 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from game_manager import (
     GameManager, EveningNotFound, PlayerNotFound, GAME_MODES, EVENING_SETTINGS,
 )
-from utils import format_duration
+from utils import format_duration, render_help_markdown
 
 app = Flask(__name__)
 
@@ -38,6 +38,9 @@ limiter = Limiter(
 CODE_LOOKUP_LIMIT = os.getenv("CODE_LOOKUP_LIMIT", "20 per minute")
 
 VISITOR_COOKIE = "cagemachine_visitor"
+
+# Regeln/Bedienung als Markdown-Datei (pro Aufruf gelesen → ohne Neustart pflegbar)
+HELP_FILE = os.getenv("HELP_FILE", os.path.join("content", "hilfe.md"))
 
 
 @app.errorhandler(429)
@@ -95,6 +98,16 @@ def evening_page(code):
 def statistics(code=None):
     """Statistik-Seite rendern (Code kommt clientseitig aus der URL)"""
     return render_template("statistics.html")
+
+
+@app.route("/api/help", methods=["GET"])
+def get_help():
+    """Regeln + Bedienung aus content/hilfe.md (Markdown → HTML, pro Aufruf gelesen)"""
+    try:
+        with open(HELP_FILE, encoding="utf-8") as f:
+            return jsonify({"html": render_help_markdown(f.read())}), 200
+    except FileNotFoundError:
+        return jsonify({"html": ""}), 200
 
 
 @app.route("/api/modes", methods=["GET"])

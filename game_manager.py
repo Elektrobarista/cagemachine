@@ -4,7 +4,7 @@ import random
 import secrets
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import db
 
@@ -56,6 +56,9 @@ EVENING_SETTINGS = ("random_bullrush",)
 # Verwaiste Runden darüber gelten als ungültig (keine Dauer)
 MAX_ROUND_DURATION = 2 * 60 * 60  # 2 Stunden
 
+# Abende, die so lange nicht genutzt wurden, werden automatisch gelöscht
+RETENTION_DAYS = float(os.getenv("RETENTION_DAYS", "14"))
+
 
 class EveningNotFound(Exception):
     """Abend zu einem Code existiert nicht"""
@@ -77,6 +80,19 @@ def _next_position(players):
     """Nächste freie Position (hinten anhängen); None, wenn noch nie gelost"""
     positions = [p["position"] for p in players if p["position"]]
     return max(positions) + 1 if positions else None
+
+
+def _delete_evening_rows(conn, evening_id):
+    """Löscht einen Abend samt Kindern (Reihenfolge wegen Fremdschlüsseln)"""
+    conn.execute(
+        "DELETE FROM round_player WHERE round_id IN"
+        " (SELECT id FROM round WHERE evening_id = ?)",
+        (evening_id,),
+    )
+    conn.execute("DELETE FROM round WHERE evening_id = ?", (evening_id,))
+    conn.execute("DELETE FROM player WHERE evening_id = ?", (evening_id,))
+    conn.execute("DELETE FROM evening_access WHERE evening_id = ?", (evening_id,))
+    conn.execute("DELETE FROM evening WHERE id = ?", (evening_id,))
 
 
 def _compact_positions(conn, players, exclude_id):
@@ -124,9 +140,23 @@ class GameManager:
 
     def __init__(self):
         db.init_db()
+        self.cleanup_expired()
+
+    def cleanup_expired(self):
+        """Löscht Abende, die länger als RETENTION_DAYS nicht genutzt wurden.
+        get_evening aktualisiert last_used_at – aktive Abende verfallen also nie."""
+        cutoff = (datetime.now() - timedelta(days=RETENTION_DAYS)).isoformat(timespec="seconds")
+        with db.connect() as conn:
+            rows = conn.execute(
+                "SELECT id FROM evening WHERE last_used_at < ?", (cutoff,)
+            ).fetchall()
+            for row in rows:
+                _delete_evening_rows(conn, row["id"])
+        return len(rows)
 
     def create_evening(self):
         """Erstellt einen neuen Abend mit eindeutigem Code"""
+        self.cleanup_expired()
         # Insert mit Retry statt check-then-insert: die UNIQUE-Constraint
         # entscheidet, damit parallele Erstellungen nicht kollidieren
         for _ in range(20):
@@ -204,18 +234,7 @@ class GameManager:
             ).fetchone()
             if not evening:
                 raise EveningNotFound(f"Kein Abend mit Code '{code}' gefunden")
-            evening_id = evening["id"]
-
-            # Reihenfolge wegen Fremdschlüsseln: erst Kinder, dann Eltern
-            conn.execute(
-                "DELETE FROM round_player WHERE round_id IN"
-                " (SELECT id FROM round WHERE evening_id = ?)",
-                (evening_id,),
-            )
-            conn.execute("DELETE FROM round WHERE evening_id = ?", (evening_id,))
-            conn.execute("DELETE FROM player WHERE evening_id = ?", (evening_id,))
-            conn.execute("DELETE FROM evening_access WHERE evening_id = ?", (evening_id,))
-            conn.execute("DELETE FROM evening WHERE id = ?", (evening_id,))
+            _delete_evening_rows(conn, evening["id"])
 
     def record_access(self, code, visitor_id):
         """Merkt sich, dass ein Gerät (Cookie) diesen Abend geöffnet hat –

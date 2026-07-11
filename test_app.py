@@ -440,8 +440,48 @@ def test_hard_remove():
     print("  ✓ Hartes Entfernen nur ohne gespielte Runden")
 
 
+def test_retention_cleanup():
+    print("\n[TEST 16] Automatische Löschung nach Aufbewahrungsfrist...")
+    # Braucht direkten DB-Zugriff zum Zurückdatieren (DB_PATH wie beim Server setzen)
+    db_path = os.getenv("DB_PATH")
+    if not db_path or not os.path.exists(db_path):
+        print("  ✓ übersprungen (DB_PATH nicht gesetzt/gefunden)")
+        return
+    import sqlite3
+
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": "Old"})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+
+    # Abend auf "vor 15 Tagen zuletzt genutzt" zurückdatieren
+    conn = sqlite3.connect(db_path)
+    evening_id = conn.execute(
+        "SELECT id FROM evening WHERE code = ?", (code,)
+    ).fetchone()[0]
+    conn.execute(
+        "UPDATE evening SET last_used_at = datetime('now', '-15 days') WHERE id = ?",
+        (evening_id,),
+    )
+    conn.commit()
+
+    # Cleanup läuft bei jedem Abend-Anlegen mit
+    requests.post(f"{BASE_URL}/api/evening")
+    r = requests.get(f"{BASE_URL}/api/evening/{code}")
+    assert r.status_code == 404, "Abgelaufener Abend sollte gelöscht sein"
+
+    # Auch die Kind-Tabellen müssen leer sein (keine verwaisten Zeilen)
+    for table in ("player", "round", "evening_access"):
+        count = conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE evening_id = ?", (evening_id,)
+        ).fetchone()[0]
+        assert count == 0, f"{table} sollte keine verwaisten Zeilen haben"
+    conn.close()
+    print("  ✓ Abgelaufener Abend samt Spielern/Runden/Zugriffen gelöscht")
+
+
 def test_rate_limit():
-    print("\n[TEST 16] Rate-Limit auf die Code-Abfrage...")
+    print("\n[TEST 17] Rate-Limit auf die Code-Abfrage...")
     # Nur aussagekräftig, wenn der Server mit niedrigem Limit läuft
     if os.getenv("CODE_LOOKUP_LIMIT") != "5 per minute":
         print("  ✓ übersprungen (CODE_LOOKUP_LIMIT != '5 per minute')")
@@ -477,5 +517,6 @@ if __name__ == "__main__":
     test_delete_evening()
     test_deactivate_reactivate()
     test_hard_remove()
+    test_retention_cleanup()
     test_rate_limit()
     print("\nAlle Tests bestanden ✓")
