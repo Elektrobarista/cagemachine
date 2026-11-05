@@ -214,3 +214,4 @@ data/
 
 # Audio-Dateien (zu groß fürs Repo, siehe README)
 static/*.ogg
+/.claude/settings.local.json
