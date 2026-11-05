@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0b3d38" />
+  <title>Rage Cage – Tisch</title>
+  <style>
+    :root {
+      --danger: #e11d48;
+      --primary: #0d9488;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body { height: 100%; }
+    body {
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(160deg, #0f2e2b 0%, #0b3d38 100%);
+      color: #eafaf6;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .cup-ico { width: 0.85em; height: 1.05em; vertical-align: -0.18em; }
+
+    /* Kopfleiste: Marke + Code links, Modus mittig, Timer rechts */
+    .topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 3vw;
+      padding: max(3vh, env(safe-area-inset-top)) max(4vw, env(safe-area-inset-right)) 0 max(4vw, env(safe-area-inset-left));
+      z-index: 3;
+    }
+    .brand { display: flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: 3.2vh; }
+    .brand .cup-ico { width: 1em; height: 1.25em; vertical-align: -0.2em; }
+    .code { opacity: 0.7; letter-spacing: 3px; font-size: 2.4vh; font-weight: 700; }
+    .mode { font-weight: 700; font-size: 2.8vh; opacity: 0.9; text-align: center; }
+    .timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 6vh; line-height: 1; }
+    .timer.idle { opacity: 0.35; }
+
+    .stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+
+    .table-view { position: relative; width: min(92vw, 155vh); height: 82vh; }
+
+    .table-oval {
+      position: absolute;
+      left: 16%; top: 20%; width: 68%; height: 60%;
+      border-radius: 50%;
+      background: #bfeade;
+      box-shadow:
+        inset 0 0 0 0.35vh rgba(13, 148, 136, 0.65),
+        inset 0 0 0 1.2vh #ffffff,
+        inset 0 0 0 1.5vh rgba(13, 148, 136, 0.4),
+        0 1vh 3vh rgba(0, 0, 0, 0.35);
+    }
+
+    .cup-tower {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: 15vh; height: auto;
+      filter: drop-shadow(0 0.4vh 0.6vh rgba(0, 0, 0, 0.45));
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .seat-chip {
+      position: absolute;
+      width: 16vh;
+      transform: translate(-50%, -50%);
+      transition: left 0.9s ease-in-out, top 0.9s ease-in-out;
+      text-align: center;
+      z-index: 1;
+    }
+
+    .seat-avatar {
+      position: relative;
+      width: 9vh; height: 9vh;
+      margin: 0 auto;
+      border-radius: 50%;
+      border: 0.5vh solid rgba(255, 255, 255, 0.9);
+      display: flex; align-items: center; justify-content: center;
+      color: white;
+      font-size: 4vh; font-weight: 700;
+      box-shadow: 0 0.3vh 1vh rgba(0, 0, 0, 0.35);
+    }
+
+    .seat-chip.startbecher .seat-avatar {
+      border-color: var(--danger);
+      box-shadow: 0 0 2.4vh rgba(225, 29, 72, 0.9);
+    }
+
+    .seat-cup {
+      position: absolute;
+      right: -2.6vh; top: -2.6vh;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+      display: none;
+    }
+    .seat-cup svg { width: 4vh; height: 4.8vh; display: block; }
+    .seat-chip.startbecher .seat-cup { display: block; }
+
+    .seat-name {
+      display: inline-block;
+      max-width: 18vh;
+      margin-top: 0.8vh;
+      padding: 0.3vh 1vh;
+      border-radius: 0.8vh;
+      background: rgba(255, 255, 255, 0.94);
+      font-size: 2.4vh; font-weight: 600;
+      color: #123;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .hint {
+      position: absolute;
+      left: 50%; top: 78%;
+      transform: translate(-50%, -50%);
+      padding: 1.2vh 2.4vh;
+      border-radius: 999px;
+      background: rgba(11, 46, 43, 0.85);   /* lesbar auch auf dem hellen Oval */
+      color: #eafaf6;
+      font-size: 3vh; text-align: center; white-space: nowrap; z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
+    <symbol id="cupLogo" viewBox="0 0 100 120">
+      <path d="M12 26 L88 26 L72 106 A22 5 0 0 1 28 106 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M15.2 42 Q50 45 84.8 42" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M17.2 52 Q50 55 82.8 52" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M23.6 84 Q50 87 76.4 84" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M25.6 94 Q50 96.5 74.4 94" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <ellipse cx="50" cy="24" rx="40" ry="9" fill="#ef4b45" stroke="#5c0f0c" stroke-width="3"/>
+      <path d="M11 24 A40 9 0 0 0 89 24 Q92 25 95 21 L98 22 Q90 30 78 27 A40 9 0 0 0 11 24 Z" fill="#f6a723" stroke="#c67d0d" stroke-width="1.6"/>
+      <circle cx="42" cy="15" r="11" fill="#fdfdfd" stroke="#c9c9c9" stroke-width="1.4"/>
+    </symbol>
+    <symbol id="towerLogo" viewBox="0 0 108 118">
+      <g>
+        <path d="M43 22 L65 22 L62 48 A8 2.2 0 0 1 46 48 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="54" cy="22" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="54" cy="22.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M31 46 L53 46 L50 72 A8 2.2 0 0 1 34 72 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="42" cy="46" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="42" cy="46.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M55 46 L77 46 L74 72 A8 2.2 0 0 1 58 72 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="66" cy="46" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="66" cy="46.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M19 70 L41 70 L38 96 A8 2.2 0 0 1 22 96 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="30" cy="70" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="30" cy="70.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M43 70 L65 70 L62 96 A8 2.2 0 0 1 46 96 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="54" cy="70" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="54" cy="70.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+      <g>
+        <path d="M67 70 L89 70 L86 96 A8 2.2 0 0 1 70 96 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="2.4" stroke-linejoin="round"/>
+        <ellipse cx="78" cy="70" rx="11" ry="3" fill="#ef4b45" stroke="#5c0f0c" stroke-width="2.4"/><ellipse cx="78" cy="70.4" rx="7.6" ry="1.8" fill="#8a1512"/>
+      </g>
+    </symbol>
+  </svg>
+
+  <div class="topbar">
+    <div class="brand"><svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Rage Cage <span class="code" id="code"></span></div>
+    <div class="mode" id="mode"></div>
+    <div class="timer idle" id="timer">–</div>
+  </div>
+
+  <div class="stage">
+    <div class="table-view" id="tableView">
+      <div class="table-oval"></div>
+      <svg class="cup-tower" aria-hidden="true"><use href="#towerLogo" xlink:href="#towerLogo"/></svg>
+      <div class="hint" id="hint">Warten auf Rundenstart …</div>
+    </div>
+  </div>
+
+  <script>
+    const CUP_SVG = '<svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"></use></svg>';
+    const PLAYER_COLORS = ["#e11d48", "#ea580c", "#d97706", "#7c3aed", "#2563eb", "#db2777", "#0891b2", "#9333ea"];
+    function playerColor(id) {
+      let h = 0;
+      for (const c of id) h = (Math.imul(h, 31) + c.charCodeAt(0)) | 0;
+      return PLAYER_COLORS[Math.abs(h) % PLAYER_COLORS.length];
+    }
+    function formatTime(seconds) {
+      if (seconds == null || isNaN(seconds) || seconds < 0) return "00:00";
+      const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+
+    const codeMatch = window.location.pathname.match(/^\/abend\/([A-Za-z0-9]+)\/tisch$/);
+    const code = codeMatch ? codeMatch[1].toUpperCase() : null;
+
+    const tableView = document.getElementById("tableView");
+    const codeEl = document.getElementById("code");
+    const modeEl = document.getElementById("mode");
+    const timerEl = document.getElementById("timer");
+    const hintEl = document.getElementById("hint");
+
+    let modeLabels = {};
+    let seatChips = {};
+    let tableAngleRoundId = null;
+    let tableAngleOffset = 0;
+    let roundStartedAtMs = null;
+
+    // Sitze rund ums Oval verteilen (Kernlogik aus index.html renderTableView)
+    function renderTable(players, openRound) {
+      const seated = players.filter(p => p.position);
+      const n = seated.length;
+      const startPos1 = openRound ? 1 : null;
+      const startPos2 = openRound ? openRound.start_pos2 : null;
+      const seen = new Set();
+
+      if (openRound && openRound.id !== tableAngleRoundId) {
+        tableAngleRoundId = openRound.id;
+        let h = 0;
+        for (const c of openRound.id) h = (h * 31 + c.charCodeAt(0)) % 997;
+        tableAngleOffset = (h / 997) * 2 * Math.PI;
+      }
+
+      seated.forEach(player => {
+        seen.add(player.id);
+        let chip = seatChips[player.id];
+        if (!chip) {
+          chip = document.createElement("div");
+          chip.className = "seat-chip";
+          const avatar = document.createElement("div");
+          avatar.className = "seat-avatar";
+          avatar.style.background = playerColor(player.id);
+          const cup = document.createElement("span");
+          cup.className = "seat-cup";
+          cup.innerHTML = CUP_SVG;
+          avatar.appendChild(cup);
+          const name = document.createElement("span");
+          name.className = "seat-name";
+          chip.appendChild(avatar);
+          chip.appendChild(name);
+          tableView.appendChild(chip);
+          seatChips[player.id] = chip;
+        }
+        chip.querySelector(".seat-avatar").childNodes[1]?.remove();
+        chip.querySelector(".seat-avatar").append(player.name.charAt(0).toUpperCase());
+        chip.querySelector(".seat-name").textContent = `${player.position} · ${player.name}`;
+        const isStartCup = player.position === startPos1 || player.position === startPos2;
+        chip.classList.toggle("startbecher", isStartCup);
+
+        const angle = Math.PI / 2 + tableAngleOffset + ((player.position - 1) / n) * 2 * Math.PI;
+        chip.style.left = `${50 + 41 * Math.cos(angle)}%`;
+        chip.style.top = `${51 + 39 * Math.sin(angle)}%`;
+      });
+
+      for (const id of Object.keys(seatChips)) {
+        if (!seen.has(id)) { seatChips[id].remove(); delete seatChips[id]; }
+      }
+    }
+
+    const MAX_ROUND_SECONDS = 2 * 60 * 60;   // wie MAX_ROUND_DURATION im Backend
+
+    function render(evening) {
+      codeEl.textContent = evening.code;
+      const raw = evening.open_round;
+      // Vergessene/verwaiste Runde (> 2 h offen) wie „keine Runde" behandeln
+      const openRound = raw && (raw.elapsed == null || raw.elapsed <= MAX_ROUND_SECONDS) ? raw : null;
+      const players = (evening.players || []).filter(p => p.active);
+      renderTable(players, openRound);
+
+      if (openRound) {
+        modeEl.textContent = modeLabels[openRound.mode] || openRound.mode || "";
+        // Timer an die lokale Uhr ankern; der Server liefert die Laufzeit (kein Zeitzonen-Fehler)
+        roundStartedAtMs = Date.now() - (openRound.elapsed || 0) * 1000;
+        hintEl.style.display = "none";
+      } else {
+        modeEl.textContent = "";
+        roundStartedAtMs = null;
+        hintEl.style.display = "block";
+      }
+      tickTimer();
+    }
+
+    function tickTimer() {
+      if (roundStartedAtMs == null || isNaN(roundStartedAtMs)) {
+        timerEl.textContent = "–";
+        timerEl.classList.add("idle");
+        return;
+      }
+      timerEl.classList.remove("idle");
+      timerEl.textContent = formatTime((Date.now() - roundStartedAtMs) / 1000);
+    }
+
+    async function loadModes() {
+      try {
+        const r = await fetch("/api/modes");
+        if (r.ok) {
+          const data = await r.json();
+          for (const m of data.modes || []) modeLabels[m.id] = m.label;
+        }
+      } catch (e) { /* Labels optional */ }
+    }
+
+    async function poll() {
+      if (!code) { hintEl.textContent = "Kein Abend-Code in der URL"; return; }
+      try {
+        const r = await fetch(`/api/evening/${encodeURIComponent(code)}/live`);
+        if (r.status === 404) { hintEl.style.display = "block"; hintEl.textContent = "Abend nicht gefunden"; return; }
+        if (!r.ok) return;                        // z. B. 429 → nächster Poll
+        const data = await r.json();
+        if (data.evening) render(data.evening);
+      } catch (e) { /* Netzfehler: letzten Stand halten, weiter versuchen */ }
+    }
+
+    // Display möglichst wachhalten (Laptop/Tablet; Kiosk-Geräte regeln das per OS)
+    async function keepAwake() {
+      if (!("wakeLock" in navigator)) return;
+      try { await navigator.wakeLock.request("screen"); } catch (e) { /* egal */ }
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") keepAwake();
+    });
+
+    loadModes().then(poll);
+    setInterval(poll, 1500);
+    setInterval(tickTimer, 1000);
+    keepAwake();
+  </script>
+</body>
+</html>

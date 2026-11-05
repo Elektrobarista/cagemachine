@@ -58,6 +58,29 @@ Serverstart und bei jedem Anlegen eines Abends).
 Der Debug-Link „Ich weiß was ich mache!" (Headstart-Sprünge im Audio) ist
 standardmäßig ausgeblendet; `HEADSTART_ENABLED=1` blendet ihn ein.
 
+### Second Screen (Tischansicht auf einem TV)
+
+Ein zweites Gerät (TV, Laptop, Tablet) kann eine **read-only Live-Ansicht** eines Abends
+anzeigen, die sich aktualisiert, während der Controller (Handy) spielt:
+
+```
+/abend/<CODE>/tisch       Tischansicht: Sitzplätze, Startbecher, Runden-Timer
+/abend/<CODE>/statistik   Live-Leaderboard: Rangliste, Highlights, laufende Runde
+```
+
+Das Display pollt den Abend-Status alle ~1,5 s (`GET /api/evening/<code>/live`, eigenes
+Limit `DISPLAY_POLL_LIMIT`, Default `120 per minute`). Kein Server-Umbau, kein
+Dauer-Connection – robust unter waitress.
+
+Praxis:
+
+- Die Links findest du in der App unter der Code-Pille → „Second Screen (Tisch)"
+  bzw. „(Statistik)".
+- Das Display muss denselben Server erreichen wie das Handy (öffentliche HTTPS-Domain
+  **oder** dasselbe LAN).
+- Für einen festen TV: Rechner/Stick per HDMI anschließen und die URL im
+  Vollbild-/Kiosk-Browser öffnen (`chromium --kiosk <URL>` o. ä.).
+
 ### Betrieb hinter nginx (Reverse-Proxy)
 
 Läuft cagemachine hinter einem Reverse-Proxy (eigene Domain, HTTPS), wertet die

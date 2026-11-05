@@ -69,7 +69,19 @@ class PlayerNotFound(Exception):
 
 
 def _now():
-    return datetime.now().isoformat(timespec="seconds")
+    # Mit UTC-Offset: Clients in anderer Zeitzone als der Server parsen korrekt
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _parse_ts(iso):
+    """ISO-String → aware datetime; alte naive Werte gelten als Server-Lokalzeit"""
+    dt = datetime.fromisoformat(iso)
+    return dt.astimezone() if dt.tzinfo is None else dt
+
+
+def _public_ts(iso):
+    """Zeitstempel für die API-Ausgabe: garantiert mit UTC-Offset (auch Altdaten)"""
+    return _parse_ts(iso).isoformat(timespec="seconds") if iso else iso
 
 
 def _evening_id(conn, code):
@@ -107,7 +119,7 @@ def _compact_positions(conn, players, exclude_id):
 
 
 def _duration_seconds(start_iso, end_iso):
-    return (datetime.fromisoformat(end_iso) - datetime.fromisoformat(start_iso)).total_seconds()
+    return (_parse_ts(end_iso) - _parse_ts(start_iso)).total_seconds()
 
 
 def _generate_code():
@@ -145,7 +157,7 @@ class GameManager:
     def cleanup_expired(self):
         """Löscht Abende, die länger als RETENTION_DAYS nicht genutzt wurden.
         get_evening aktualisiert last_used_at – aktive Abende verfallen also nie."""
-        cutoff = (datetime.now() - timedelta(days=RETENTION_DAYS)).isoformat(timespec="seconds")
+        cutoff = (datetime.now().astimezone() - timedelta(days=RETENTION_DAYS)).isoformat(timespec="seconds")
         with db.connect() as conn:
             rows = conn.execute(
                 "SELECT id FROM evening WHERE last_used_at < ?", (cutoff,)
@@ -202,13 +214,20 @@ class GameManager:
                 (evening["id"],),
             ).fetchone()
 
+        open_round_out = None
+        if open_round:
+            open_round_out = dict(open_round)
+            open_round_out["started_at"] = _public_ts(open_round["started_at"])
+            # Server-berechnete Laufzeit (sek.): vermeidet Zeitzonen-Fehler im Client
+            open_round_out["elapsed"] = round(_duration_seconds(open_round["started_at"], _now()))
+
         return {
             "code": evening["code"],
             "name": evening["name"] or "",
-            "created_at": evening["created_at"],
+            "created_at": _public_ts(evening["created_at"]),
             "random_bullrush": bool(evening["random_bullrush"]),
             "players": [_player_dict(p) for p in players],
-            "open_round": dict(open_round) if open_round else None,
+            "open_round": open_round_out,
         }
 
     def set_name(self, code, name):
@@ -267,7 +286,12 @@ class GameManager:
                 " ORDER BY a.last_used_at DESC LIMIT ?",
                 (visitor_id, limit),
             ).fetchall()
-        return [{**dict(row), "name": row["name"] or ""} for row in rows]
+        return [
+            {**dict(row), "name": row["name"] or "",
+             "created_at": _public_ts(row["created_at"]),
+             "last_used_at": _public_ts(row["last_used_at"])}
+            for row in rows
+        ]
 
     def set_setting(self, code, setting, enabled):
         """Schaltet eine boolesche Abend-Einstellung an/aus"""
@@ -442,8 +466,8 @@ class GameManager:
                 if longest_round is None or r["duration"] > longest_round:
                     longest_round = r["duration"]
             rounds_out.append({
-                "started_at": r["started_at"],
-                "ended_at": r["ended_at"],
+                "started_at": _public_ts(r["started_at"]),
+                "ended_at": _public_ts(r["ended_at"]),
                 "mode": r["mode"],
                 "duration": r["duration"],
                 "player_count": len(by_round.get(r["id"], [])),
@@ -484,14 +508,15 @@ class GameManager:
 
         # Abend-Zeitraum: erste Runde bis Ende der letzten (bzw. deren Start,
         # solange sie noch läuft)
-        first_round_at = rounds[0]["started_at"] if rounds else None
+        first_round_at = _public_ts(rounds[0]["started_at"]) if rounds else None
         last_round_at = (
-            (rounds[-1]["ended_at"] or rounds[-1]["started_at"]) if rounds else None
+            _public_ts(rounds[-1]["ended_at"] or rounds[-1]["started_at"]) if rounds else None
         )
 
         return {
             "evening": {"code": evening["code"], "name": evening.get("name", ""),
-                        "created_at": evening["created_at"]},
+                        "created_at": evening["created_at"],
+                        "open_round": evening["open_round"]},
             "summary": {
                 "total_rounds": total_rounds,
                 "total_duration": total_duration,

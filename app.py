@@ -37,6 +37,9 @@ limiter = Limiter(
 
 CODE_LOOKUP_LIMIT = os.getenv("CODE_LOOKUP_LIMIT", "20 per minute")
 
+# Zweitschirm-Displays pollen ihren bekannten Code häufig → eigenes, großzügiges Limit
+DISPLAY_POLL_LIMIT = os.getenv("DISPLAY_POLL_LIMIT", "120 per minute")
+
 VISITOR_COOKIE = "cagemachine_visitor"
 
 # Regeln/Bedienung als Markdown-Datei (pro Aufruf gelesen → ohne Neustart pflegbar)
@@ -103,6 +106,18 @@ def statistics(code=None):
     return render_template("statistics.html")
 
 
+@app.route("/abend/<code>/tisch")
+def table_display(code):
+    """Read-only Kiosk-Tischansicht (Zweitschirm; Code kommt clientseitig aus der URL)"""
+    return render_template("tisch.html")
+
+
+@app.route("/abend/<code>/statistik")
+def stats_display(code):
+    """Read-only Kiosk-Leaderboard (Zweitschirm; Code kommt clientseitig aus der URL)"""
+    return render_template("statistik.html")
+
+
 @app.route("/api/help", methods=["GET"])
 def get_help():
     """Regeln + Bedienung aus content/hilfe.md (Markdown → HTML, pro Aufruf gelesen)"""
@@ -139,6 +154,13 @@ def get_evening(code):
     return _visitor_response({"evening": evening}, evening["code"])
 
 
+@app.route("/api/evening/<code>/live", methods=["GET"])
+@limiter.limit(lambda: DISPLAY_POLL_LIMIT)
+def evening_live(code):
+    """Abend-Status für Zweitschirm-Displays (häufiges Polling, read-only)"""
+    return jsonify({"evening": game_manager.get_evening(code)}), 200
+
+
 @app.route("/api/evening/<code>", methods=["DELETE"])
 def delete_evening(code):
     """Löscht einen Abend samt aller zugehörigen Daten (unumkehrbar)"""
@@ -149,9 +171,10 @@ def delete_evening(code):
 @app.route("/api/evening/<code>/qr", methods=["GET"])
 @limiter.limit(lambda: CODE_LOOKUP_LIMIT)
 def evening_qr(code):
-    """QR-Code (SVG) des teilbaren Abend-Links"""
+    """QR-Code (SVG) des teilbaren Abend-Links (view=tisch → Zweitschirm-Link)"""
     evening = game_manager.get_evening(code)
-    link = f"{request.host_url}abend/{evening['code']}"
+    suffix = "/tisch" if request.args.get("view") == "tisch" else ""
+    link = f"{request.host_url}abend/{evening['code']}{suffix}"
     img = qrcode.make(link, image_factory=qrcode.image.svg.SvgPathImage,
                       box_size=10, border=2)
     buf = io.BytesIO()
@@ -245,12 +268,9 @@ def end_round(code):
 
 
 # Statistik-API
-@app.route("/api/evening/<code>/statistics", methods=["GET"])
-@limiter.limit(lambda: CODE_LOOKUP_LIMIT)
-def get_evening_statistics(code):
-    """Statistik eines Abends: Zusammenfassung, Spieler-Auswertung, Rundenliste"""
+def _stats_payload(code):
+    """Statistik eines Abends inkl. formatierter Dauern (für Seite + Display)"""
     stats = game_manager.get_statistics(code)
-
     stats["summary"]["total_duration_formatted"] = format_duration(stats["summary"]["total_duration"])
     stats["summary"]["longest_round_formatted"] = format_duration(stats["summary"]["longest_round"])
     stats["summary"]["avg_duration_formatted"] = format_duration(stats["summary"]["avg_duration"])
@@ -258,8 +278,22 @@ def get_evening_statistics(code):
         player["total_duration_formatted"] = format_duration(player["total_duration"])
     for r in stats["rounds"]:
         r["duration_formatted"] = format_duration(r["duration"]) if r["duration"] is not None else "–"
+    return stats
 
+
+@app.route("/api/evening/<code>/statistics", methods=["GET"])
+@limiter.limit(lambda: CODE_LOOKUP_LIMIT)
+def get_evening_statistics(code):
+    """Statistik eines Abends: Zusammenfassung, Spieler-Auswertung, Rundenliste"""
+    stats = _stats_payload(code)
     return _visitor_response(stats, stats["evening"]["code"])
+
+
+@app.route("/api/evening/<code>/statistics/live", methods=["GET"])
+@limiter.limit(lambda: DISPLAY_POLL_LIMIT)
+def evening_statistics_live(code):
+    """Statistik für das Zweitschirm-Leaderboard (häufiges Polling, ohne Cookie)"""
+    return jsonify(_stats_payload(code)), 200
 
 
 def _csv_bytes(header, rows):

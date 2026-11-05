@@ -480,8 +480,44 @@ def test_retention_cleanup():
     print("  ✓ Abgelaufener Abend samt Spielern/Runden/Zugriffen gelöscht")
 
 
+def test_live_endpoint():
+    print("\n[TEST 17] Live-Endpoint + Kiosk-Tischansicht (Zweitschirm)...")
+    code = requests.post(f"{BASE_URL}/api/evening").json()["evening"]["code"]
+    for name in ["Vito", "Wanda"]:
+        requests.post(f"{BASE_URL}/api/evening/{code}/players", json={"name": name})
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/start", json={"mode": "classic"})
+
+    r = requests.get(f"{BASE_URL}/api/evening/{code}/live")
+    assert r.status_code == 200
+    ev = r.json()["evening"]
+    assert ev["code"] == code
+    assert sorted(p["position"] for p in ev["players"]) == [1, 2], "Positionen im Live-Status"
+    assert ev["open_round"] and ev["open_round"]["started_at"], "started_at für den Timer"
+    assert ev["open_round"]["start_pos2"] == 2, "zweiter Startbecher bei 2 Spielern auf Position 2"
+
+    r = requests.get(f"{BASE_URL}/api/evening/XXXX/live")
+    assert r.status_code == 404, "Unbekannter Code sollte 404 liefern"
+
+    # Kiosk-Seiten rendern (Routen existieren)
+    r = requests.get(f"{BASE_URL}/abend/{code}/tisch")
+    assert r.status_code == 200 and "tableView" in r.text, "Tischansicht sollte rendern"
+    r = requests.get(f"{BASE_URL}/abend/{code}/statistik")
+    assert r.status_code == 200 and "Runden" in r.text, "Statistik-Display sollte rendern"
+
+    # Live-Leaderboard-Endpoint: Spieler + laufende Runde im Payload
+    r = requests.get(f"{BASE_URL}/api/evening/{code}/statistics/live")
+    assert r.status_code == 200
+    stats = r.json()
+    assert stats["evening"]["code"] == code
+    assert stats["evening"]["open_round"] and stats["evening"]["open_round"]["elapsed"] is not None
+    assert any(p["rounds_played"] >= 1 for p in stats["players"]), "Spieler mit Runden im Leaderboard"
+
+    requests.post(f"{BASE_URL}/api/evening/{code}/round/end")
+    print("  ✓ /live + /statistics/live liefern Daten, /tisch + /statistik rendern")
+
+
 def test_rate_limit():
-    print("\n[TEST 17] Rate-Limit auf die Code-Abfrage...")
+    print("\n[TEST 18] Rate-Limit auf die Code-Abfrage...")
     # Nur aussagekräftig, wenn der Server mit niedrigem Limit läuft
     if os.getenv("CODE_LOOKUP_LIMIT") != "5 per minute":
         print("  ✓ übersprungen (CODE_LOOKUP_LIMIT != '5 per minute')")
@@ -518,5 +554,6 @@ if __name__ == "__main__":
     test_deactivate_reactivate()
     test_hard_remove()
     test_retention_cleanup()
+    test_live_endpoint()
     test_rate_limit()
     print("\nAlle Tests bestanden ✓")

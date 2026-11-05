@@ -895,8 +895,10 @@
       <!-- Teilen-Karte: per Code-Pille oben rechts ein-/ausgeklappt -->
       <div class="share-box" id="shareBox" style="display: none;">
         <div class="share-content">
-          <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Link kopieren</button>
+          <button class="btn btn-secondary btn-small" id="btnCopyLink"><svg class="ic" aria-hidden="true"><use href="#ic-link" xlink:href="#ic-link"/></svg> Abend teilen</button>
           <img id="shareQr" class="share-qr" alt="QR-Code zum Beitreten" />
+          <button class="btn btn-secondary btn-small" id="btnCopyTableLink"><svg class="ic" aria-hidden="true"><use href="#ic-chart" xlink:href="#ic-chart"/></svg> Second Screen (Tisch)</button>
+          <button class="btn btn-secondary btn-small" id="btnCopyStatsLink"><svg class="ic" aria-hidden="true"><use href="#ic-chart" xlink:href="#ic-chart"/></svg> Second Screen (Statistik)</button>
         </div>
       </div>
 
@@ -1868,6 +1870,14 @@
     });
     document.getElementById("btnCopyLink").addEventListener("click", (e) => {
       if (currentCode) copyWithFeedback(e.currentTarget, eveningLink());
+    });
+    // Zweitschirm: Link zur read-only Kiosk-Tischansicht (für TV/Laptop)
+    document.getElementById("btnCopyTableLink").addEventListener("click", (e) => {
+      if (currentCode) copyWithFeedback(e.currentTarget, eveningLink() + "/tisch");
+    });
+    // Zweitschirm: Link zum read-only Live-Leaderboard
+    document.getElementById("btnCopyStatsLink").addEventListener("click", (e) => {
+      if (currentCode) copyWithFeedback(e.currentTarget, eveningLink() + "/statistik");
     });
 
     // Statistik als In-Page-Overlay öffnen (kein Seitenwechsel → Musik läuft weiter)

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0b3d38" />
+  <title>Rage Cage – Runden</title>
+  <style>
+    :root { --primary: #0d9488; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body {
+      height: 100vh; height: 100dvh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(160deg, #0f2e2b 0%, #0b3d38 100%);
+      color: #eafaf6;
+      -webkit-user-select: none; user-select: none;
+      display: flex; flex-direction: column;
+      padding: max(2.5vh, env(safe-area-inset-top)) max(3vw, env(safe-area-inset-right)) max(2.5vh, env(safe-area-inset-bottom)) max(3vw, env(safe-area-inset-left));
+    }
+
+    .cup-ico { width: 0.85em; height: 1.05em; vertical-align: -0.18em; }
+    .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+    .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 2vw; margin-bottom: 2vh; }
+    .brand { display: flex; align-items: center; gap: 0.5em; font-weight: 800; font-size: 3.2vh; }
+    .brand .cup-ico { width: 1em; height: 1.25em; vertical-align: -0.2em; }
+    .code { opacity: 0.7; letter-spacing: 3px; font-size: 2.4vh; font-weight: 700; }
+    .title { font-size: 3vh; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.9; }
+    .round { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 3.2vh; text-align: right; min-width: 10em; }
+    .round .lbl { opacity: 0.6; font-weight: 600; font-size: 2.2vh; margin-right: 0.5em; }
+
+    .summary { display: flex; gap: 1.6vw; margin-bottom: 2vh; }
+    .stat {
+      flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 1.2vh; padding: 1.4vh 1vh; text-align: center;
+    }
+    .stat .v { font-size: 4.2vh; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .stat .k { font-size: 1.8vh; text-transform: uppercase; letter-spacing: 0.06em; color: #8fc9bf; font-weight: 700; margin-top: 0.3vh; }
+
+    .rounds { flex: 1; min-height: 0; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; font-size: 2vh; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #8fc9bf; padding: 0 1.5vw 1.2vh; border-bottom: 0.3vh solid rgba(255,255,255,0.12);
+    }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody td { padding: 1.3vh 1.5vw; font-size: 2.9vh; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .rnum { color: #8fc9bf; font-weight: 700; }
+    tr.running { background: rgba(13,148,136,0.16); }
+    tr.running .dur { color: #34d399; font-weight: 800; }
+    tr.longest .dur { color: #fbbf24; font-weight: 800; }
+
+    .empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 3.4vh; opacity: 0.65; }
+
+    .footer { display: flex; gap: 1.6vw; margin-top: 2vh; }
+    .hl {
+      flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 1.2vh; padding: 1.4vh 2vh; display: flex; align-items: center; gap: 1.4vh;
+    }
+    .hl .k { font-size: 1.8vh; text-transform: uppercase; letter-spacing: 0.06em; color: #8fc9bf; font-weight: 700; }
+    .hl .v { font-size: 2.6vh; font-weight: 700; }
+    .hl .cup-ico { width: 3vh; height: 3.7vh; }
+  </style>
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
+    <symbol id="cupLogo" viewBox="0 0 100 120">
+      <path d="M12 26 L88 26 L72 106 A22 5 0 0 1 28 106 Z" fill="#d8352f" stroke="#5c0f0c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M15.2 42 Q50 45 84.8 42" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M17.2 52 Q50 55 82.8 52" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M23.6 84 Q50 87 76.4 84" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <path d="M25.6 94 Q50 96.5 74.4 94" fill="none" stroke="#a81f1b" stroke-width="2.4"/>
+      <ellipse cx="50" cy="24" rx="40" ry="9" fill="#ef4b45" stroke="#5c0f0c" stroke-width="3"/>
+      <path d="M11 24 A40 9 0 0 0 89 24 Q92 25 95 21 L98 22 Q90 30 78 27 A40 9 0 0 0 11 24 Z" fill="#f6a723" stroke="#c67d0d" stroke-width="1.6"/>
+      <circle cx="42" cy="15" r="11" fill="#fdfdfd" stroke="#c9c9c9" stroke-width="1.4"/>
+    </symbol>
+  </svg>
+
+  <div class="topbar">
+    <div class="brand"><svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"/></svg> Rage Cage <span class="code" id="code"></span></div>
+    <div class="title">Runden</div>
+    <div class="round" id="round"></div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="rounds" id="rounds"></div>
+  <div class="footer" id="footer"></div>
+
+  <script>
+    const CUP_SVG = '<svg class="cup-ico" aria-hidden="true"><use href="#cupLogo" xlink:href="#cupLogo"></use></svg>';
+    const MAX_ROUND_SECONDS = 2 * 60 * 60;
+    const MAX_ROWS = 10;   // neueste Runden, die neben den Highlights auf einen TV passen
+
+    function esc(t) { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; }
+    function formatTime(seconds) {
+      if (seconds == null || isNaN(seconds) || seconds < 0) return "00:00";
+      const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+    function clock(iso) {
+      const d = new Date(iso);
+      return isNaN(d) ? "" : d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    const codeMatch = window.location.pathname.match(/^\/abend\/([A-Za-z0-9]+)\/statistik$/);
+    const code = codeMatch ? codeMatch[1].toUpperCase() : null;
+
+    const codeEl = document.getElementById("code");
+    const roundEl = document.getElementById("round");
+    const summaryEl = document.getElementById("summary");
+    const roundsEl = document.getElementById("rounds");
+    const footerEl = document.getElementById("footer");
+
+    let roundStartedAtMs = null;
+    let totalRounds = 0;
+    let modeLabels = {};
+
+    function render(stats) {
+      codeEl.textContent = stats.evening.code;
+      const summary = stats.summary;
+      totalRounds = summary.total_rounds;
+      const raw = stats.evening.open_round;
+      const open = raw && (raw.elapsed == null || raw.elapsed <= MAX_ROUND_SECONDS) ? raw : null;
+      roundStartedAtMs = open ? Date.now() - (open.elapsed || 0) * 1000 : null;
+
+      // Kennzahlen (neutral, kein Sieger)
+      summaryEl.innerHTML = [
+        ["Runden", summary.total_rounds],
+        ["Gesamtzeit", summary.total_duration_formatted],
+        ["Längste", summary.longest_round != null ? summary.longest_round_formatted : "–"],
+        ["Ø Runde", summary.avg_duration != null ? summary.avg_duration_formatted : "–"],
+      ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+      renderHighlights(stats.players || []);
+
+      const rounds = stats.rounds || [];
+      if (!rounds.length) { roundsEl.innerHTML = `<div class="empty">Noch keine Runden gespielt</div>`; tickRound(); return; }
+
+      const longest = summary.longest_round;
+      // neueste zuerst; Rundennummer bleibt chronologisch
+      const rows = rounds.map((r, i) => ({ ...r, nr: i + 1 })).reverse().slice(0, MAX_ROWS).map(r => {
+        const running = r.ended_at == null;
+        const isLongest = !running && r.duration != null && r.duration === longest;
+        const dur = running ? `<span id="runningDur">läuft …</span>` : r.duration_formatted;
+        return `<tr class="${running ? "running" : (isLongest ? "longest" : "")}">
+          <td class="rnum">${r.nr}</td>
+          <td>${clock(r.started_at)}</td>
+          <td>${esc(modeLabels[r.mode] || r.mode)}</td>
+          <td class="dur num">${dur}</td>
+          <td class="num">${r.player_count}</td>
+        </tr>`;
+      }).join("");
+
+      roundsEl.innerHTML = `
+        <table>
+          <thead><tr>
+            <th class="rnum">#</th><th>Gestartet</th><th>Modus</th>
+            <th class="num">Dauer</th><th class="num">Mitspieler</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      tickRound();
+    }
+
+    function renderHighlights(players) {
+      const byTime = [...players].sort((a, b) => b.total_duration - a.total_duration)[0];
+      const byCups = [...players].sort((a, b) => b.start_cups - a.start_cups)[0];
+      const cards = [];
+      if (byTime && byTime.total_duration > 0)
+        cards.push(`<div class="hl"><div><div class="k">Marathon-Spieler</div><div class="v">${esc(byTime.name)} · ${byTime.total_duration_formatted}</div></div></div>`);
+      if (byCups && byCups.start_cups > 0)
+        cards.push(`<div class="hl">${CUP_SVG}<div><div class="k">Becher-Magnet</div><div class="v">${esc(byCups.name)} · ${byCups.start_cups}×</div></div></div>`);
+      footerEl.innerHTML = cards.join("");
+    }
+
+    function tickRound() {
+      const running = roundStartedAtMs != null;
+      const secs = running ? (Date.now() - roundStartedAtMs) / 1000 : 0;
+      if (running) {
+        roundEl.innerHTML = `<span class="lbl">Runde läuft</span>${formatTime(secs)}`;
+        const cell = document.getElementById("runningDur");
+        if (cell) cell.textContent = `läuft · ${formatTime(secs)}`;
+      } else {
+        roundEl.innerHTML = `<span class="lbl">Runden</span>${totalRounds}`;
+      }
+    }
+
+    async function loadModes() {
+      try {
+        const r = await fetch("/api/modes");
+        if (r.ok) { const d = await r.json(); for (const m of d.modes || []) modeLabels[m.id] = m.label; }
+      } catch (e) { /* Labels optional */ }
+    }
+
+    async function poll() {
+      if (!code) { roundsEl.innerHTML = `<div class="empty">Kein Abend-Code in der URL</div>`; return; }
+      try {
+        const r = await fetch(`/api/evening/${encodeURIComponent(code)}/statistics/live`);
+        if (r.status === 404) { roundsEl.innerHTML = `<div class="empty">Abend nicht gefunden</div>`; return; }
+        if (!r.ok) return;
+        render(await r.json());
+      } catch (e) { /* Netzfehler: letzten Stand halten */ }
+    }
+
+    async function keepAwake() {
+      if (!("wakeLock" in navigator)) return;
+      try { await navigator.wakeLock.request("screen"); } catch (e) { /* egal */ }
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") keepAwake();
+    });
+
+    loadModes().then(poll);
+    setInterval(poll, 3000);
+    setInterval(tickRound, 1000);
+    keepAwake();
+  </script>
+</body>
+</html>
